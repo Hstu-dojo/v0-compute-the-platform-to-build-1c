@@ -149,7 +149,7 @@ export default function DocumentPage() {
     setOutputCache({});
     try {
       const types = [...selectedTypes].filter((t) => t !== "podcast");
-      const res = await generateStudySet({ document_id: docId, output_types: types });
+      const res = await generateStudySet({ document_id: docId, types });
       const batchId = res.batch_id;
       await pollBatch(batchId);
       pollRef.current = setInterval(() => pollBatch(batchId), 3000);

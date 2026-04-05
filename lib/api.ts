@@ -303,7 +303,7 @@ export async function uploadText(body: { title: string; text: string }): Promise
 
 export async function generateStudySet(body: {
   document_id: string;
-  output_types: string[];
+  types: string[];
 }): Promise<{ batch_id: string }> {
   return apiPost<{ batch_id: string }>("/api/v1/study-sets/generate", body);
 }
