@@ -1,0 +1,422 @@
+"use client";
+
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useParams } from "next/navigation";
+import Link from "next/link";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import {
+  getDocument,
+  generateStudySet,
+  getBatchStatus,
+  getOutputContent,
+  type Document,
+  type BatchJob,
+  type BatchStatus,
+  type Flashcard,
+  type MCQQuestion,
+  type FillBlankItem,
+} from "@/lib/api";
+import { FlashcardViewer } from "@/components/dashboard/flashcard-viewer";
+import { MCQViewer } from "@/components/dashboard/mcq-viewer";
+import { FillBlanksViewer } from "@/components/dashboard/fill-blanks-viewer";
+import { ChevronLeft, Loader2, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
+
+const OUTPUT_TYPES = [
+  { id: "notes", label: "Notes" },
+  { id: "flashcards", label: "Flashcards" },
+  { id: "multiple_choice", label: "Multiple Choice" },
+  { id: "fill_in_blanks", label: "Fill in Blanks" },
+  { id: "written_test", label: "Written Test" },
+  { id: "tutor_lesson", label: "Tutor Lesson" },
+  { id: "content", label: "Study Guide" },
+  { id: "podcast", label: "Podcast", comingSoon: true },
+] as const;
+
+type OutputTypeId = (typeof OUTPUT_TYPES)[number]["id"];
+
+const MARKDOWN_TYPES: OutputTypeId[] = ["notes", "tutor_lesson", "content", "written_test"];
+
+function JobStatusBadge({ status }: { status: BatchJob["status"] }) {
+  if (status === "queued") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] font-mono text-muted-foreground">
+        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" />
+        Queued
+      </span>
+    );
+  }
+  if (status === "processing") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] font-mono text-yellow-400">
+        <Loader2 className="w-3 h-3 animate-spin" />
+        Processing
+      </span>
+    );
+  }
+  if (status === "completed") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] font-mono text-green-400">
+        <CheckCircle2 className="w-3 h-3" />
+        Done
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-[11px] font-mono text-red-400">
+      <XCircle className="w-3 h-3" />
+      Failed
+    </span>
+  );
+}
+
+function MarkdownContent({ content }: { content: string }) {
+  return (
+    <div className="prose prose-invert prose-sm max-w-none text-foreground/90 leading-relaxed [&_h1]:text-foreground [&_h2]:text-foreground [&_h3]:text-foreground [&_strong]:text-foreground [&_code]:text-foreground/80 [&_code]:bg-foreground/10 [&_code]:rounded [&_code]:px-1 [&_blockquote]:border-foreground/20 [&_a]:text-foreground/80">
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+    </div>
+  );
+}
+
+function extractContent(data: unknown, type: OutputTypeId): string | Flashcard[] | MCQQuestion[] | FillBlankItem[] | null {
+  if (!data || typeof data !== "object") return null;
+  const d = data as Record<string, unknown>;
+
+  if (MARKDOWN_TYPES.includes(type)) {
+    return (d.content ?? d.text ?? d.notes ?? "") as string;
+  }
+  if (type === "flashcards") {
+    return (d.flashcards ?? d.cards ?? []) as Flashcard[];
+  }
+  if (type === "multiple_choice") {
+    return (d.questions ?? d.multiple_choice ?? []) as MCQQuestion[];
+  }
+  if (type === "fill_in_blanks") {
+    return (d.exercises ?? d.items ?? d.fill_in_blanks ?? []) as FillBlankItem[];
+  }
+  return null;
+}
+
+export default function DocumentPage() {
+  const params = useParams();
+  const docId = params.id as string;
+
+  const [doc, setDoc] = useState<Document | null>(null);
+  const [docLoading, setDocLoading] = useState(true);
+  const [docError, setDocError] = useState<string | null>(null);
+
+  const [selectedTypes, setSelectedTypes] = useState<Set<OutputTypeId>>(new Set(["notes", "flashcards"]));
+  const [generating, setGenerating] = useState(false);
+  const [genError, setGenError] = useState<string | null>(null);
+
+  const [batch, setBatch] = useState<BatchStatus | null>(null);
+  const pollRef = useRef<NodeJS.Timeout | null>(null);
+
+  const [activeTab, setActiveTab] = useState<string | null>(null);
+  const [outputCache, setOutputCache] = useState<Record<string, unknown>>({});
+  const [outputLoading, setOutputLoading] = useState<Record<string, boolean>>({});
+  const [outputError, setOutputError] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    getDocument(docId)
+      .then((res) => setDoc(res.document))
+      .catch((e) => setDocError(e.message))
+      .finally(() => setDocLoading(false));
+  }, [docId]);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+  }, []);
+
+  const pollBatch = useCallback(async (batchId: string) => {
+    try {
+      const status = await getBatchStatus(batchId);
+      setBatch(status);
+      const allDone = status.jobs.every((j) => j.status === "completed" || j.status === "failed");
+      if (allDone) stopPolling();
+    } catch (e) {
+      console.error("Poll error:", e);
+    }
+  }, [stopPolling]);
+
+  useEffect(() => () => stopPolling(), [stopPolling]);
+
+  const handleGenerate = async () => {
+    setGenError(null);
+    setGenerating(true);
+    setBatch(null);
+    setActiveTab(null);
+    setOutputCache({});
+    try {
+      const types = [...selectedTypes].filter((t) => t !== "podcast");
+      const res = await generateStudySet({ document_id: docId, output_types: types });
+      const batchId = res.batch_id;
+      await pollBatch(batchId);
+      pollRef.current = setInterval(() => pollBatch(batchId), 3000);
+    } catch (e) {
+      setGenError(e instanceof Error ? e.message : "Generation failed");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const loadOutput = useCallback(async (job: BatchJob) => {
+    const type = job.output_type;
+    if (!job.output_id || outputCache[type] !== undefined) return;
+
+    setOutputLoading((l) => ({ ...l, [type]: true }));
+    setOutputError((e) => ({ ...e, [type]: "" }));
+    try {
+      const data = await getOutputContent(job.output_id!, type);
+      setOutputCache((c) => ({ ...c, [type]: data }));
+    } catch (e) {
+      setOutputError((err) => ({ ...err, [type]: e instanceof Error ? e.message : "Failed to load" }));
+    } finally {
+      setOutputLoading((l) => ({ ...l, [type]: false }));
+    }
+  }, [outputCache]);
+
+  const handleTabClick = useCallback((job: BatchJob) => {
+    setActiveTab(job.output_type);
+    loadOutput(job);
+  }, [loadOutput]);
+
+  const toggleType = (id: OutputTypeId) => {
+    setSelectedTypes((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const completedJobs = batch?.jobs.filter((j) => j.status === "completed") ?? [];
+
+  const renderOutput = (type: string) => {
+    const data = outputCache[type];
+    if (outputLoading[type]) {
+      return (
+        <div className="flex items-center gap-2 text-muted-foreground py-8">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          <span className="text-sm">Loading…</span>
+        </div>
+      );
+    }
+    if (outputError[type]) {
+      return (
+        <div className="flex items-center gap-2 text-red-400 py-4">
+          <AlertCircle className="w-4 h-4" />
+          <span className="text-sm">{outputError[type]}</span>
+        </div>
+      );
+    }
+    if (!data) return null;
+
+    const typeId = type as OutputTypeId;
+    const content = extractContent(data, typeId);
+
+    if (MARKDOWN_TYPES.includes(typeId)) {
+      return <MarkdownContent content={(content as string) || ""} />;
+    }
+    if (typeId === "flashcards") {
+      return <FlashcardViewer flashcards={(content as Flashcard[]) || []} />;
+    }
+    if (typeId === "multiple_choice") {
+      return <MCQViewer questions={(content as MCQQuestion[]) || []} />;
+    }
+    if (typeId === "fill_in_blanks") {
+      return <FillBlanksViewer items={(content as FillBlankItem[]) || []} />;
+    }
+    return (
+      <pre className="text-xs text-muted-foreground overflow-auto whitespace-pre-wrap">
+        {JSON.stringify(data, null, 2)}
+      </pre>
+    );
+  };
+
+  if (docLoading) {
+    return (
+      <main className="max-w-4xl mx-auto px-6 py-10">
+        <div className="h-8 w-48 rounded-lg bg-foreground/5 animate-pulse mb-8" />
+        <div className="h-24 rounded-xl bg-foreground/5 animate-pulse" />
+      </main>
+    );
+  }
+
+  if (docError) {
+    return (
+      <main className="max-w-4xl mx-auto px-6 py-10">
+        <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-8">
+          <ChevronLeft className="w-3.5 h-3.5" /> Back
+        </Link>
+        <div className="flex items-center gap-3 p-4 rounded-xl border border-red-500/20 bg-red-500/5">
+          <AlertCircle className="w-4 h-4 text-red-400" />
+          <p className="text-sm text-red-400">{docError}</p>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="max-w-4xl mx-auto px-6 py-10">
+      <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-8">
+        <ChevronLeft className="w-3.5 h-3.5" /> Back to documents
+      </Link>
+
+      {/* Document header */}
+      <div className="mb-8 pb-6 border-b border-foreground/10">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-display text-foreground mb-1">{doc?.title}</h1>
+            <div className="flex items-center gap-3 text-xs text-muted-foreground font-mono">
+              {doc?.created_at && (
+                <span>
+                  {new Date(doc.created_at).toLocaleDateString("en-US", {
+                    month: "short", day: "numeric", year: "numeric",
+                  })}
+                </span>
+              )}
+              {doc?.page_count && <span>· {doc.page_count} pages</span>}
+              {doc?.word_count && <span>· {doc.word_count.toLocaleString()} words</span>}
+            </div>
+          </div>
+          <span className={`shrink-0 text-[11px] font-mono px-2.5 py-1 rounded-full border ${
+            doc?.status === "ready" ? "text-green-400 bg-green-500/10 border-green-500/20" :
+            doc?.status === "pending_embedding" ? "text-yellow-400 bg-yellow-500/10 border-yellow-500/20" :
+            "text-red-400 bg-red-500/10 border-red-500/20"
+          }`}>
+            {doc?.status === "pending_embedding" ? "Processing" : doc?.status}
+          </span>
+        </div>
+      </div>
+
+      {doc?.status !== "ready" && (
+        <div className="flex items-center gap-3 p-4 rounded-xl border border-yellow-500/20 bg-yellow-500/5 mb-8">
+          <Loader2 className="w-4 h-4 text-yellow-400 animate-spin" />
+          <p className="text-sm text-yellow-400">Document is still being processed. Please check back in a moment.</p>
+        </div>
+      )}
+
+      {doc?.status === "ready" && (
+        <>
+          {/* Generate section */}
+          {!batch && (
+            <section className="mb-8">
+              <h2 className="text-lg font-display text-foreground mb-4">Generate study materials</h2>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-6">
+                {OUTPUT_TYPES.map(({ id, label, comingSoon }) => {
+                  const isSelected = selectedTypes.has(id);
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => !comingSoon && toggleType(id)}
+                      disabled={!!comingSoon}
+                      className={`relative px-3 py-2.5 rounded-xl border text-left text-sm transition-all ${
+                        comingSoon
+                          ? "border-foreground/5 text-muted-foreground/30 cursor-not-allowed"
+                          : isSelected
+                          ? "border-foreground/40 bg-foreground/8 text-foreground"
+                          : "border-foreground/10 text-muted-foreground hover:border-foreground/20 hover:text-foreground"
+                      }`}
+                    >
+                      {label}
+                      {comingSoon && (
+                        <span className="absolute top-1 right-1 text-[8px] font-mono text-muted-foreground/40 leading-none">
+                          soon
+                        </span>
+                      )}
+                      {isSelected && !comingSoon && (
+                        <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-foreground/60" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {genError && (
+                <div className="flex items-center gap-2 p-3 rounded-xl border border-red-500/20 bg-red-500/5 mb-4">
+                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                  <p className="text-sm text-red-400">{genError}</p>
+                </div>
+              )}
+
+              <button
+                onClick={handleGenerate}
+                disabled={generating || selectedTypes.size === 0}
+                className="h-11 px-8 rounded-xl bg-foreground text-background text-sm font-medium hover:bg-foreground/90 disabled:opacity-50 transition-colors flex items-center gap-2"
+              >
+                {generating ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Generating…</>
+                ) : (
+                  "Generate"
+                )}
+              </button>
+            </section>
+          )}
+
+          {/* Batch progress */}
+          {batch && (
+            <section className="mb-8">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-display text-foreground">Generation progress</h2>
+                <button
+                  onClick={() => { setBatch(null); setActiveTab(null); setOutputCache({}); stopPolling(); }}
+                  className="text-xs text-muted-foreground hover:text-foreground underline"
+                >
+                  New batch
+                </button>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-6">
+                {batch.jobs.map((job) => (
+                  <div key={job.id} className="flex items-center justify-between px-3 py-2.5 rounded-xl border border-foreground/10 bg-foreground/[0.02]">
+                    <span className="text-sm text-foreground capitalize">
+                      {OUTPUT_TYPES.find((t) => t.id === job.output_type)?.label ?? job.output_type}
+                    </span>
+                    <JobStatusBadge status={job.status} />
+                  </div>
+                ))}
+              </div>
+
+              {/* Output tabs */}
+              {completedJobs.length > 0 && (
+                <div>
+                  <div className="flex gap-1 flex-wrap mb-4">
+                    {completedJobs.map((job) => {
+                      const label = OUTPUT_TYPES.find((t) => t.id === job.output_type)?.label ?? job.output_type;
+                      const isActive = activeTab === job.output_type;
+                      return (
+                        <button
+                          key={job.id}
+                          onClick={() => handleTabClick(job)}
+                          className={`h-8 px-3.5 rounded-lg text-sm transition-all ${
+                            isActive
+                              ? "bg-foreground text-background"
+                              : "border border-foreground/10 text-muted-foreground hover:text-foreground hover:border-foreground/20"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {activeTab && (
+                    <div className="p-6 rounded-2xl border border-foreground/10 bg-foreground/[0.02] min-h-32">
+                      {renderOutput(activeTab)}
+                    </div>
+                  )}
+
+                  {!activeTab && (
+                    <p className="text-sm text-muted-foreground">
+                      Select an output above to view it.
+                    </p>
+                  )}
+                </div>
+              )}
+            </section>
+          )}
+        </>
+      )}
+    </main>
+  );
+}
