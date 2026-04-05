@@ -16,6 +16,7 @@ export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -44,13 +45,15 @@ export default function UploadPage() {
     if (tab === "text" && !textContent.trim()) { setError("Please paste some content"); return; }
 
     setLoading(true);
+    setUploadProgress(null);
     try {
       let doc;
       if (tab === "pdf") {
         const fd = new FormData();
         fd.append("file", file!);
         fd.append("title", title.trim());
-        const res = await uploadPdf(fd);
+        setUploadProgress(0);
+        const res = await uploadPdf(fd, (pct) => setUploadProgress(pct));
         doc = res.document;
       } else {
         const res = await uploadText({ title: title.trim(), content: textContent.trim() });
@@ -168,6 +171,22 @@ export default function UploadPage() {
         />
       )}
 
+      {/* Upload progress bar (PDF only) */}
+      {uploadProgress !== null && (
+        <div className="mt-4 space-y-1.5">
+          <div className="flex justify-between text-xs font-mono text-muted-foreground">
+            <span>Uploading…</span>
+            <span>{uploadProgress}%</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-foreground/10 overflow-hidden">
+            <div
+              className="h-full bg-foreground/50 rounded-full transition-all duration-200"
+              style={{ width: `${uploadProgress}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Error */}
       {error && (
         <div className="flex items-center gap-2.5 mt-4 p-3 rounded-xl border border-red-500/20 bg-red-500/5">
@@ -186,7 +205,7 @@ export default function UploadPage() {
           {loading ? (
             <>
               <span className="w-4 h-4 border border-background/30 border-t-background rounded-full animate-spin" />
-              Uploading…
+              {uploadProgress !== null ? `Uploading ${uploadProgress}%…` : "Processing…"}
             </>
           ) : (
             <>

@@ -40,23 +40,46 @@ export async function apiPost<T = unknown>(path: string, body?: unknown): Promis
   return res.json() as Promise<T>;
 }
 
-export async function apiPostFormData<T = unknown>(path: string, formData: FormData): Promise<T> {
+export async function apiPostFormData<T = unknown>(
+  path: string,
+  formData: FormData,
+  onProgress?: (percent: number) => void
+): Promise<T> {
   const token = await getIdToken();
   const headers: Record<string, string> = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const sessionId = getSessionId();
   if (sessionId) headers["x-session-id"] = sessionId;
 
-  const res = await fetch(`${BASE_URL}${path}`, {
-    method: "POST",
-    headers,
-    body: formData,
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${BASE_URL}${path}`);
+    Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+
+    if (onProgress) {
+      xhr.upload.addEventListener("progress", (e) => {
+        if (e.lengthComputable) {
+          onProgress(Math.round((e.loaded / e.total) * 100));
+        }
+      });
+    }
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try { resolve(JSON.parse(xhr.responseText) as T); }
+        catch { reject(new Error("Invalid response")); }
+      } else {
+        try {
+          const err = JSON.parse(xhr.responseText);
+          reject(new Error(err?.error?.message ?? xhr.statusText));
+        } catch {
+          reject(new Error(xhr.statusText));
+        }
+      }
+    };
+    xhr.onerror = () => reject(new Error("Network error"));
+    xhr.send(formData);
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: { message: res.statusText } }));
-    throw new Error(err?.error?.message ?? res.statusText);
-  }
-  return res.json() as Promise<T>;
 }
 
 export async function apiDelete<T = unknown>(path: string): Promise<T> {
@@ -177,8 +200,11 @@ export async function getDocument(id: string): Promise<{ document: Document }> {
   return apiGet<{ document: Document }>(`/api/v1/documents/${id}`);
 }
 
-export async function uploadPdf(formData: FormData): Promise<{ document: Document }> {
-  return apiPostFormData<{ document: Document }>("/api/v1/upload/pdf", formData);
+export async function uploadPdf(
+  formData: FormData,
+  onProgress?: (percent: number) => void
+): Promise<{ document: Document }> {
+  return apiPostFormData<{ document: Document }>("/api/v1/upload/pdf", formData, onProgress);
 }
 
 export async function uploadText(body: { title: string; content: string }): Promise<{ document: Document }> {
