@@ -12,7 +12,7 @@ import {
   type User,
   type UserCredential,
 } from "./firebase";
-import { createSession, terminateSession, storeTokens, clearTokens, type AuthSessionResponse } from "./api";
+import { createSession, terminateSession, storeTokens, clearTokens, getAccessToken, type AuthSessionResponse } from "./api";
 
 interface AuthContextType {
   user: User | null;
@@ -40,6 +40,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem("pilotai_session_id", data.session.session_id);
     }
     setSessionData(data);
+    if (auth.currentUser) setUser(auth.currentUser);
+    setLoading(false);
   };
 
   const handleSignOut = () => {
@@ -57,14 +59,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      setUser(firebaseUser);
       if (firebaseUser) {
         const token = await firebaseUser.getIdToken();
         setIdToken(token);
+        if (getAccessToken()) {
+          setUser(firebaseUser);
+          setLoading(false);
+        }
+        // else: fresh sign-in in progress — handleSessionResponse will call setUser + setLoading(false)
       } else {
+        setUser(null);
         handleSignOut();
+        setLoading(false);
       }
-      setLoading(false);
     });
     return unsubscribe;
   }, []);
@@ -114,6 +121,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await terminateSession();
     await firebaseSignOut(auth);
     handleSignOut();
+    setUser(null);
+    setLoading(false);
   };
 
   return (
