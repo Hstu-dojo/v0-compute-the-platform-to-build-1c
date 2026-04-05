@@ -32,3 +32,12 @@ outputType = "webview"
 [[ports]]
 localPort = 5000
 externalPort = 80
+
+[userenv]
+
+[userenv.shared]
+NEXT_PUBLIC_FIREBASE_API_KEY = "AIzaSyBDClpxnrW2TKXebX7uGBaP5XPrReiXS6Y"
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN = "pilotai-project.firebaseapp.com"
+NEXT_PUBLIC_FIREBASE_PROJECT_ID = "pilotai-project"
+NEXT_PUBLIC_FIREBASE_APP_ID = "1:348740764344:web:5d7278d27d997ebfa8ea4d"
+NEXT_PUBLIC_API_URL = "https://tutor-ai.up.railway.app"

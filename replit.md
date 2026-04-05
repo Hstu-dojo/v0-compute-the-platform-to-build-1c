@@ -1,37 +1,73 @@
-# COMPUTE - AI Agents for Distributed Computing
+# PilotAI — AI Study Assistant
 
-## Project Overview
-A Next.js 16 landing page for COMPUTE, a platform for deploying autonomous AI agents on distributed infrastructure. Originally built with v0.app and migrated from Vercel to Replit.
+## Overview
+PilotAI is an AI-powered study application built with Next.js 16 (App Router). Users can upload documents (PDF or text) and generate study materials: notes, flashcards, multiple choice quizzes, fill-in-the-blank exercises, written tests, and tutor lessons — all via the live backend at `https://tutor-ai.up.railway.app`.
 
-## Architecture
-- **Framework**: Next.js 16 (App Router) with Turbopack
-- **Styling**: Tailwind CSS v4 with shadcn/ui component library
-- **Fonts**: Instrument Sans, Instrument Serif, JetBrains Mono (Google Fonts)
-- **3D/Canvas**: Custom ASCII scene renderer using HTML Canvas (no Three.js runtime dependency in rendering)
-- **Package Manager**: npm
+The UI inherits the dark monochrome aesthetic of the original COMPUTE landing page.
 
-## Directory Structure
-- `app/` - Next.js App Router pages and layouts
-- `components/landing/` - All landing page section components (all use client-side rendering)
-- `components/ui/` - shadcn/ui base components
-- `components/theme-provider.tsx` - Theme provider wrapper
-- `lib/` - Utility functions
-- `hooks/` - Custom React hooks
-- `public/` - Static assets
-- `styles/` - Global styles
+## Tech Stack
+- **Framework**: Next.js 16.0.10, React 19, TypeScript
+- **Styling**: Tailwind CSS v4, shadcn/ui components
+- **Auth**: Firebase (pilotai-project) — email/password + Google SSO
+- **Backend**: `https://tutor-ai.up.railway.app` (FastAPI, bearer token auth)
+- **Package manager**: npm with --legacy-peer-deps
 
-## Running the App
-- **Dev**: `npm run dev` (runs on port 5000, bound to 0.0.0.0 for Replit compatibility)
-- **Build**: `npm run build`
-- **Start**: `npm start` (production, port 5000)
+## Environment Variables (NEXT_PUBLIC_ — shared)
+| Variable | Purpose |
+|---|---|
+| NEXT_PUBLIC_FIREBASE_API_KEY | Firebase project API key |
+| NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN | pilotai-project.firebaseapp.com |
+| NEXT_PUBLIC_FIREBASE_PROJECT_ID | pilotai-project |
+| NEXT_PUBLIC_FIREBASE_APP_ID | Firebase app ID |
+| NEXT_PUBLIC_API_URL | https://tutor-ai.up.railway.app |
 
-## Replit Migration Notes
-- Removed `@vercel/analytics` dependency (Vercel-specific, not needed on Replit)
-- Updated dev/start scripts to use `-p 5000 -H 0.0.0.0` for Replit's preview system
-- Added `allowedDevOrigins: ["*.replit.dev", "*.repl.co"]` to `next.config.mjs` to suppress cross-origin warnings
-- Workflow: "Start application" runs `npm run dev` and serves on port 5000
+## Auth Flow
+1. User signs in via Firebase (email/password or Google popup)
+2. After Google sign-in, the full `UserCredential` and raw ID token are `console.log`'d (always, not just dev)
+3. POST `/api/v1/auth/register` with `{ display_name }` (ignores 409 if already registered)
+4. POST `/api/v1/auth/session` with `Authorization: Bearer <token>` → returns `session_id`
+5. `session_id` stored in `localStorage` as `pilotai_session_id`
+6. All API calls use `Authorization: Bearer <token>` + `x-session-id` headers
 
-## Key Configuration Files
-- `next.config.mjs` - Next.js configuration with TypeScript error bypass, unoptimized images, allowed dev origins
-- `components.json` - shadcn/ui configuration
-- `tsconfig.json` - TypeScript configuration
+## Key Files
+- `lib/firebase.ts` — Firebase app init, auth helpers
+- `lib/auth-context.tsx` — React context with `useAuth()`, console logging of creds
+- `lib/api.ts` — Typed fetch wrappers for all backend endpoints
+- `components/auth/protected-route.tsx` — Redirects unauthenticated users to /login
+- `components/dev/token-panel.tsx` — DEV-ONLY floating panel: shows ID token, copy + send-to-server buttons
+- `app/login/page.tsx` — Login page (email + Google SSO)
+- `app/signup/page.tsx` — Signup page (email + Google SSO)
+- `app/dashboard/` — Authenticated area (layout + page)
+
+## Routes
+| Path | Description |
+|---|---|
+| `/` | Landing page (PilotAI branded) |
+| `/login` | Login (redirects to /dashboard if already signed in) |
+| `/signup` | Signup (redirects to /dashboard if already signed in) |
+| `/dashboard` | Protected — redirects to /login if not signed in |
+
+## Backend API
+Base: `https://tutor-ai.up.railway.app`  
+Auth: `Authorization: Bearer <Firebase ID token>` + `x-session-id` header
+
+Key endpoints (all under `/api/v1/`):
+- `POST /auth/register` — register new user `{ display_name }`
+- `POST /auth/session` — create session `{ device_type, device_name }`
+- `DELETE /auth/session` — terminate session
+- `POST /upload/pdf` — multipart PDF upload
+- `POST /upload/text` — JSON text upload `{ title, text }`
+- `GET /documents` — list documents
+- `POST /study-sets/generate` — `{ document_id, types[] }` → returns batch_id
+- `GET /study-sets/batch/{batch_id}` — poll job status
+- `GET /study-sets/output/{output_id}/{type}` — fetch generated output
+- `GET /credits/balance` — credit balance
+
+Output types: `notes`, `content`, `tutor_lesson`, `flashcards`, `multiple_choice`, `fill_in_blanks`, `written_test`, `podcast`
+
+## Dev Panel
+When `NODE_ENV=development`, a floating panel appears in the bottom-right corner of the dashboard showing:
+- Current Firebase ID token in a scrollable textarea (click to select all)
+- Copy Token button
+- Refresh Token button
+- Send to Server button (POSTs to /api/v1/auth/session and displays JSON response)
