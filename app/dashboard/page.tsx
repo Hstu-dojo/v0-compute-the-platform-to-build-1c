@@ -25,7 +25,7 @@ export default function DashboardPage() {
     setError(null);
     try {
       const res = await getDocuments();
-      setDocs(res.documents ?? []);
+      setDocs(res.data ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load documents");
     } finally {
@@ -138,12 +138,12 @@ export default function DashboardPage() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-foreground truncate">{doc.title}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {new Date(doc.created_at).toLocaleDateString("en-US", {
+                    {new Date(doc.createdAt).toLocaleDateString("en-US", {
                       month: "short",
                       day: "numeric",
                       year: "numeric",
                     })}
-                    {doc.page_count ? ` · ${doc.page_count} pages` : ""}
+                    {doc.pageCount ? ` · ${doc.pageCount} pages` : ""}
                   </p>
                 </div>
 

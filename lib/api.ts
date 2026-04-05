@@ -2,28 +2,96 @@ import { getIdToken } from "./firebase";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://tutor-ai.up.railway.app";
 
-function getSessionId(): string | null {
+const ACCESS_TOKEN_KEY = "pilotai_access_token";
+const REFRESH_TOKEN_KEY = "pilotai_refresh_token";
+const TOKEN_EXPIRES_KEY = "pilotai_token_expires_at";
+
+export function getAccessToken(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem("pilotai_session_id");
+  return localStorage.getItem(ACCESS_TOKEN_KEY);
+}
+
+export function storeTokens(auth: AuthTokens) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(ACCESS_TOKEN_KEY, auth.access_token);
+  localStorage.setItem(REFRESH_TOKEN_KEY, auth.refresh_token);
+  localStorage.setItem(TOKEN_EXPIRES_KEY, auth.expires_at);
+}
+
+export function clearTokens() {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(ACCESS_TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+  localStorage.removeItem(TOKEN_EXPIRES_KEY);
+  localStorage.removeItem("pilotai_session_id");
+}
+
+function isTokenExpired(): boolean {
+  if (typeof window === "undefined") return true;
+  const exp = localStorage.getItem(TOKEN_EXPIRES_KEY);
+  if (!exp) return true;
+  return new Date(exp).getTime() - 30_000 < Date.now();
+}
+
+function getRefreshToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(REFRESH_TOKEN_KEY);
+}
+
+async function refreshAccessToken(): Promise<string | null> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return null;
+  try {
+    const res = await fetch(`${BASE_URL}/api/v1/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    if (!res.ok) { clearTokens(); return null; }
+    const data: AuthSessionResponse = await res.json();
+    storeTokens(data.auth);
+    if (data.session?.session_id && typeof window !== "undefined") {
+      localStorage.setItem("pilotai_session_id", data.session.session_id);
+    }
+    return data.auth.access_token;
+  } catch {
+    return null;
+  }
+}
+
+async function getValidAccessToken(): Promise<string | null> {
+  let token = getAccessToken();
+  if (token && !isTokenExpired()) return token;
+  token = await refreshAccessToken();
+  return token;
 }
 
 async function buildHeaders(extra: Record<string, string> = {}): Promise<Record<string, string>> {
-  const token = await getIdToken();
+  const token = await getValidAccessToken();
   const headers: Record<string, string> = { ...extra };
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  const sessionId = getSessionId();
-  if (sessionId) headers["x-session-id"] = sessionId;
   return headers;
 }
 
-export async function apiGet<T = unknown>(path: string): Promise<T> {
-  const headers = await buildHeaders({ "Content-Type": "application/json" });
-  const res = await fetch(`${BASE_URL}${path}`, { headers });
+async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: { message: res.statusText } }));
     throw new Error(err?.error?.message ?? res.statusText);
   }
   return res.json() as Promise<T>;
+}
+
+export async function apiGet<T = unknown>(path: string): Promise<T> {
+  const headers = await buildHeaders({ "Content-Type": "application/json" });
+  const res = await fetch(`${BASE_URL}${path}`, { headers });
+  if (res.status === 401) {
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      const retryHeaders = { "Content-Type": "application/json", "Authorization": `Bearer ${newToken}` };
+      return handleResponse<T>(await fetch(`${BASE_URL}${path}`, { headers: retryHeaders }));
+    }
+  }
+  return handleResponse<T>(res);
 }
 
 export async function apiPost<T = unknown>(path: string, body?: unknown): Promise<T> {
@@ -33,11 +101,18 @@ export async function apiPost<T = unknown>(path: string, body?: unknown): Promis
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: { message: res.statusText } }));
-    throw new Error(err?.error?.message ?? res.statusText);
+  if (res.status === 401) {
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      const retryHeaders = { "Content-Type": "application/json", "Authorization": `Bearer ${newToken}` };
+      return handleResponse<T>(await fetch(`${BASE_URL}${path}`, {
+        method: "POST",
+        headers: retryHeaders,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      }));
+    }
   }
-  return res.json() as Promise<T>;
+  return handleResponse<T>(res);
 }
 
 export async function apiPostFormData<T = unknown>(
@@ -45,11 +120,9 @@ export async function apiPostFormData<T = unknown>(
   formData: FormData,
   onProgress?: (percent: number) => void
 ): Promise<T> {
-  const token = await getIdToken();
+  const token = await getValidAccessToken();
   const headers: Record<string, string> = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  const sessionId = getSessionId();
-  if (sessionId) headers["x-session-id"] = sessionId;
 
   return new Promise<T>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -58,9 +131,7 @@ export async function apiPostFormData<T = unknown>(
 
     if (onProgress) {
       xhr.upload.addEventListener("progress", (e) => {
-        if (e.lengthComputable) {
-          onProgress(Math.round((e.loaded / e.total) * 100));
-        }
+        if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
       });
     }
 
@@ -92,45 +163,59 @@ export async function apiDelete<T = unknown>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export async function createSession(token: string) {
+export interface AuthTokens {
+  token_type: string;
+  access_token: string;
+  expires_at: string;
+  refresh_token: string;
+  refresh_expires_at: string;
+}
+
+export interface AuthSessionResponse {
+  user: {
+    id: string;
+    firebase_uid: string;
+    email: string;
+    display_name: string;
+    role: "student" | "admin";
+    is_email_verified: boolean;
+    last_login_at?: string | null;
+  };
+  session: {
+    session_id: string;
+    expires_at: string;
+  };
+  auth: AuthTokens;
+  subscription: {
+    plan: "free" | "pro";
+    status: string;
+    current_period_end: string | null;
+    billing_interval: "monthly" | "yearly";
+  };
+  token_balance: number;
+  is_new_user: boolean;
+}
+
+export async function createSession(firebaseIdToken: string): Promise<AuthSessionResponse> {
   const res = await fetch(`${BASE_URL}/api/v1/auth/session`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${token}`,
+      "Authorization": `Bearer ${firebaseIdToken}`,
     },
     body: JSON.stringify({ device_type: "web", device_name: "PilotAI Web" }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data?.error?.message ?? res.statusText);
-  return data;
+  return data as AuthSessionResponse;
 }
 
-export async function registerUser(token: string, displayName: string) {
-  const res = await fetch(`${BASE_URL}/api/v1/auth/register`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${token}`,
-    },
-    body: JSON.stringify({ display_name: displayName }),
-  });
-  if (res.status === 409) return null;
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error?.message ?? res.statusText);
-  return data;
-}
-
-export async function terminateSession() {
-  const token = await getIdToken();
-  const sessionId = getSessionId();
-  if (!token || !sessionId) return;
+export async function terminateSession(): Promise<void> {
+  const token = getAccessToken();
+  if (!token) return;
   await fetch(`${BASE_URL}/api/v1/auth/session`, {
     method: "DELETE",
-    headers: {
-      "Authorization": `Bearer ${token}`,
-      "x-session-id": sessionId,
-    },
+    headers: { "Authorization": `Bearer ${token}` },
   }).catch(() => {});
 }
 
@@ -141,12 +226,17 @@ export interface CreditBalance {
 
 export interface Document {
   id: string;
+  userId: string;
   title: string;
+  filename: string;
+  contentHash: string;
   status: "pending_embedding" | "ready" | "failed";
-  created_at: string;
-  page_count?: number;
-  char_count?: number;
-  word_count?: number;
+  embeddingJobId?: string | null;
+  r2Path?: string | null;
+  pageCount?: number | null;
+  characterCount?: number | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface BatchJob {
@@ -192,8 +282,8 @@ export async function getCredits(): Promise<CreditBalance> {
   return apiGet<CreditBalance>("/api/v1/credits/balance");
 }
 
-export async function getDocuments(): Promise<{ documents: Document[] }> {
-  return apiGet<{ documents: Document[] }>("/api/v1/documents");
+export async function getDocuments(): Promise<{ data: Document[]; next_cursor: string | null }> {
+  return apiGet<{ data: Document[]; next_cursor: string | null }>("/api/v1/documents");
 }
 
 export async function getDocument(id: string): Promise<{ document: Document }> {
@@ -207,7 +297,7 @@ export async function uploadPdf(
   return apiPostFormData<{ document: Document }>("/api/v1/upload/pdf", formData, onProgress);
 }
 
-export async function uploadText(body: { title: string; content: string }): Promise<{ document: Document }> {
+export async function uploadText(body: { title: string; text: string }): Promise<{ document: Document }> {
   return apiPost<{ document: Document }>("/api/v1/upload/text", body);
 }
 

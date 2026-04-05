@@ -12,13 +12,13 @@ import {
   type User,
   type UserCredential,
 } from "./firebase";
-import { createSession, registerUser, terminateSession } from "./api";
+import { createSession, terminateSession, storeTokens, clearTokens, type AuthSessionResponse } from "./api";
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   idToken: string | null;
-  sessionData: Record<string, unknown> | null;
+  sessionData: AuthSessionResponse | null;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, displayName: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
@@ -32,20 +32,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [idToken, setIdToken] = useState<string | null>(null);
-  const [sessionData, setSessionData] = useState<Record<string, unknown> | null>(null);
+  const [sessionData, setSessionData] = useState<AuthSessionResponse | null>(null);
 
-  const storeSession = (data: Record<string, unknown>) => {
-    const sessionId = (data?.session as { session_id?: string })?.session_id;
-    if (sessionId && typeof window !== "undefined") {
-      localStorage.setItem("pilotai_session_id", sessionId);
+  const handleSessionResponse = (data: AuthSessionResponse) => {
+    storeTokens(data.auth);
+    if (data.session?.session_id && typeof window !== "undefined") {
+      localStorage.setItem("pilotai_session_id", data.session.session_id);
     }
     setSessionData(data);
   };
 
-  const clearSession = () => {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("pilotai_session_id");
-    }
+  const handleSignOut = () => {
+    clearTokens();
     setSessionData(null);
     setIdToken(null);
   };
@@ -64,7 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const token = await firebaseUser.getIdToken();
         setIdToken(token);
       } else {
-        clearSession();
+        handleSignOut();
       }
       setLoading(false);
     });
@@ -80,10 +78,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log("[PilotAI] Firebase ID Token:", token);
     }
     const data = await createSession(token);
-    storeSession(data);
+    handleSessionResponse(data);
   };
 
-  const signUp = async (email: string, password: string, displayName: string) => {
+  const signUp = async (email: string, password: string, _displayName: string) => {
     const cred = await createUserWithEmailAndPassword(auth, email, password);
     const token = await cred.user.getIdToken();
     setIdToken(token);
@@ -91,9 +89,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log("[PilotAI] signUp credential:", cred);
       console.log("[PilotAI] Firebase ID Token:", token);
     }
-    await registerUser(token, displayName || email.split("@")[0]);
     const data = await createSession(token);
-    storeSession(data);
+    handleSessionResponse(data);
   };
 
   const signInWithGoogle = async () => {
@@ -105,10 +102,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     console.log("[PilotAI] Google user:", cred.user);
     console.log("[PilotAI] Firebase ID Token:", token);
 
-    const displayName = cred.user.displayName ?? cred.user.email?.split("@")[0] ?? "User";
-    await registerUser(token, displayName);
     const data = await createSession(token);
-    storeSession(data);
+    handleSessionResponse(data);
 
     if (process.env.NODE_ENV === "development") {
       console.log("[PilotAI] Session response:", data);
@@ -118,7 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     await terminateSession();
     await firebaseSignOut(auth);
-    clearSession();
+    handleSignOut();
   };
 
   return (

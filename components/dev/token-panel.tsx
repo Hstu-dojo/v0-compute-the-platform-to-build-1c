@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { getAccessToken } from "@/lib/api";
 
 export function DevTokenPanel() {
   if (process.env.NODE_ENV !== "development") return null;
-
   return <DevTokenPanelInner />;
 }
 
@@ -14,10 +14,14 @@ function DevTokenPanelInner() {
   const [serverResponse, setServerResponse] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState<"app" | "firebase">("app");
+
+  const appToken = getAccessToken();
+  const displayToken = activeTab === "app" ? appToken : idToken;
 
   const handleCopy = async () => {
-    if (!idToken) return;
-    await navigator.clipboard.writeText(idToken);
+    if (!displayToken) return;
+    await navigator.clipboard.writeText(displayToken);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -53,16 +57,33 @@ function DevTokenPanelInner() {
   };
 
   return (
-    <div className="fixed bottom-4 right-4 z-[9999] w-[420px] max-h-[80vh] overflow-y-auto bg-black border border-yellow-500/40 rounded-xl p-4 shadow-2xl text-xs font-mono">
+    <div className="fixed bottom-4 right-4 z-[9999] w-[440px] max-h-[80vh] overflow-y-auto bg-black border border-yellow-500/40 rounded-xl p-4 shadow-2xl text-xs font-mono">
       <div className="flex items-center justify-between mb-3">
         <span className="text-yellow-400 font-semibold">DEV — Token Panel</span>
         <span className="text-white/30 text-[10px]">NODE_ENV=development</span>
       </div>
 
-      <label className="block text-white/40 mb-1">Firebase ID Token</label>
+      {/* Tab switcher */}
+      <div className="flex gap-1 mb-3">
+        {(["app", "firebase"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setActiveTab(t)}
+            className={`flex-1 h-7 rounded text-[10px] transition-colors ${
+              activeTab === t ? "bg-yellow-500/30 text-yellow-300" : "bg-white/5 text-white/40 hover:bg-white/10"
+            }`}
+          >
+            {t === "app" ? "App Access Token" : "Firebase ID Token"}
+          </button>
+        ))}
+      </div>
+
+      <label className="block text-white/40 mb-1">
+        {activeTab === "app" ? "App Access Token (use for API calls)" : "Firebase ID Token (use for /auth/session)"}
+      </label>
       <textarea
         readOnly
-        value={idToken ?? "(no token — sign in first)"}
+        value={displayToken ?? "(no token — sign in first)"}
         rows={4}
         className="w-full bg-white/5 border border-white/10 rounded p-2 text-white/80 resize-none text-[10px] leading-relaxed mb-2 select-all"
         onClick={(e) => (e.target as HTMLTextAreaElement).select()}
@@ -71,16 +92,16 @@ function DevTokenPanelInner() {
       <div className="flex gap-2 mb-3">
         <button
           onClick={handleCopy}
-          disabled={!idToken}
+          disabled={!displayToken}
           className="flex-1 h-8 rounded bg-white/10 hover:bg-white/20 disabled:opacity-30 text-white transition-colors"
         >
-          {copied ? "Copied!" : "Copy Token"}
+          {copied ? "Copied!" : "Copy"}
         </button>
         <button
           onClick={handleRefresh}
           className="flex-1 h-8 rounded bg-white/10 hover:bg-white/20 text-white transition-colors"
         >
-          Refresh Token
+          Refresh Firebase
         </button>
         <button
           onClick={handleSendToServer}

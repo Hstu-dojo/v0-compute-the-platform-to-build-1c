@@ -56,7 +56,7 @@ export default function UploadPage() {
         const res = await uploadPdf(fd, (pct) => setUploadProgress(pct));
         doc = res.document;
       } else {
-        const res = await uploadText({ title: title.trim(), content: textContent.trim() });
+        const res = await uploadText({ title: title.trim(), text: textContent.trim() });
         doc = res.document;
       }
       router.push(`/dashboard/documents/${doc.id}`);

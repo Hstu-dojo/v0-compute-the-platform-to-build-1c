@@ -268,15 +268,15 @@ export default function DocumentPage() {
           <div>
             <h1 className="text-2xl font-display text-foreground mb-1">{doc?.title}</h1>
             <div className="flex items-center gap-3 text-xs text-muted-foreground font-mono">
-              {doc?.created_at && (
+              {doc?.createdAt && (
                 <span>
-                  {new Date(doc.created_at).toLocaleDateString("en-US", {
+                  {new Date(doc.createdAt).toLocaleDateString("en-US", {
                     month: "short", day: "numeric", year: "numeric",
                   })}
                 </span>
               )}
-              {doc?.page_count && <span>· {doc.page_count} pages</span>}
-              {doc?.word_count && <span>· {doc.word_count.toLocaleString()} words</span>}
+              {doc?.pageCount && <span>· {doc.pageCount} pages</span>}
+              {doc?.characterCount && <span>· {doc.characterCount.toLocaleString()} chars</span>}
             </div>
           </div>
           <span className={`shrink-0 text-[11px] font-mono px-2.5 py-1 rounded-full border ${
