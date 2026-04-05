@@ -4,18 +4,18 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
 
 const navLinks = [
-  { name: "Capabilities",  href: "#features"      },
-  { name: "Process",       href: "#how-it-works"  },
-  { name: "Infra",         href: "#infra"          },
-  { name: "Integrations",  href: "#integrations"  },
-  { name: "Security",      href: "#security"      },
+  { name: "Features",  href: "#features"    },
+  { name: "How it works", href: "#how-it-works" },
+  { name: "Pricing",   href: "#pricing"     },
 ];
 
 export function Navigation() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { user, loading } = useAuth();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -24,6 +24,8 @@ export function Navigation() {
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  const isLoggedIn = !loading && !!user;
 
   return (
     <header
@@ -67,19 +69,31 @@ export function Navigation() {
 
           {/* Desktop CTA */}
           <div className="hidden md:flex items-center gap-4">
-            <Link
-              href="/login"
-              className={`transition-all duration-500 ${isScrolled ? "text-xs text-foreground/70 hover:text-foreground" : "text-sm text-white/70 hover:text-white"}`}
-            >
-              Sign in
-            </Link>
-            <Button
-              asChild
-              size="sm"
-              className={`rounded-full transition-all duration-500 ${isScrolled ? "bg-foreground hover:bg-foreground/90 text-background px-4 h-8 text-xs" : "bg-white hover:bg-white/90 text-black px-6"}`}
-            >
-              <Link href="/signup">Get started</Link>
-            </Button>
+            {isLoggedIn ? (
+              <Button
+                asChild
+                size="sm"
+                className={`rounded-full transition-all duration-500 ${isScrolled ? "bg-foreground hover:bg-foreground/90 text-background px-4 h-8 text-xs" : "bg-white hover:bg-white/90 text-black px-6"}`}
+              >
+                <Link href="/dashboard">Dashboard</Link>
+              </Button>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className={`transition-all duration-500 ${isScrolled ? "text-xs text-foreground/70 hover:text-foreground" : "text-sm text-white/70 hover:text-white"}`}
+                >
+                  Sign in
+                </Link>
+                <Button
+                  asChild
+                  size="sm"
+                  className={`rounded-full transition-all duration-500 ${isScrolled ? "bg-foreground hover:bg-foreground/90 text-background px-4 h-8 text-xs" : "bg-white hover:bg-white/90 text-black px-6"}`}
+                >
+                  <Link href="/signup">Get started</Link>
+                </Button>
+              </>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -135,23 +149,36 @@ export function Navigation() {
           }`}
           style={{ transitionDelay: isMobileMenuOpen ? "300ms" : "0ms" }}
           >
-            <Button 
-              asChild
-              variant="outline" 
-              className="flex-1 rounded-full h-14 text-base"
-            >
-              <Link href="/login" onClick={() => setIsMobileMenuOpen(false)}>
-                Sign in
-              </Link>
-            </Button>
-            <Button 
-              asChild
-              className="flex-1 bg-foreground text-background rounded-full h-14 text-base"
-            >
-              <Link href="/signup" onClick={() => setIsMobileMenuOpen(false)}>
-                Get started
-              </Link>
-            </Button>
+            {isLoggedIn ? (
+              <Button 
+                asChild
+                className="flex-1 bg-foreground text-background rounded-full h-14 text-base"
+              >
+                <Link href="/dashboard" onClick={() => setIsMobileMenuOpen(false)}>
+                  Go to Dashboard
+                </Link>
+              </Button>
+            ) : (
+              <>
+                <Button 
+                  asChild
+                  variant="outline" 
+                  className="flex-1 rounded-full h-14 text-base"
+                >
+                  <Link href="/login" onClick={() => setIsMobileMenuOpen(false)}>
+                    Sign in
+                  </Link>
+                </Button>
+                <Button 
+                  asChild
+                  className="flex-1 bg-foreground text-background rounded-full h-14 text-base"
+                >
+                  <Link href="/signup" onClick={() => setIsMobileMenuOpen(false)}>
+                    Get started
+                  </Link>
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </div>
