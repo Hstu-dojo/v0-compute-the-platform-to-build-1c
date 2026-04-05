@@ -9,7 +9,6 @@ import {
   createUserWithEmailAndPassword,
   firebaseSignOut,
   onAuthStateChanged,
-  getIdToken as firebaseGetIdToken,
   type User,
   type UserCredential,
 } from "./firebase";
