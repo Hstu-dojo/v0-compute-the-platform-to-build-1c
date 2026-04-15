@@ -385,9 +385,12 @@ export async function createSession(firebaseIdToken: string): Promise<AuthSessio
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${firebaseIdToken}`,
     },
-    body: JSON.stringify({ device_type: "web", device_name: "PilotAI Web" }),
+    body: JSON.stringify({ 
+      firebase_id_token: firebaseIdToken,
+      device_type: "web", 
+      device_name: "PilotAI Web" 
+    }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data?.error?.message ?? res.statusText);

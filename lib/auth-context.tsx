@@ -34,6 +34,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [idToken, setIdToken] = useState<string | null>(null);
   const [sessionData, setSessionData] = useState<AuthSessionResponse | null>(null);
 
+  const [isManualAuth, setIsManualAuth] = useState(false);
+
   const handleSessionResponse = (data: AuthSessionResponse) => {
     storeTokens(data.auth);
     if (data.session?.session_id && typeof window !== "undefined") {
@@ -65,8 +67,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (getAccessToken()) {
           setUser(firebaseUser);
           setLoading(false);
+        } else if (!isManualAuth) {
+          try {
+            const data = await createSession(token);
+            handleSessionResponse(data);
+          } catch (e) {
+            console.error("Failed to restore session", e);
+            setUser(null);
+            handleSignOut();
+            setLoading(false);
+          }
         }
-        // else: fresh sign-in in progress — handleSessionResponse will call setUser + setLoading(false)
       } else {
         setUser(null);
         handleSignOut();
@@ -74,46 +85,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
     return unsubscribe;
-  }, []);
+  }, [isManualAuth]);
 
   const signIn = async (email: string, password: string) => {
-    const cred = await signInWithEmailAndPassword(auth, email, password);
-    const token = await cred.user.getIdToken();
-    setIdToken(token);
-    if (process.env.NODE_ENV === "development") {
-      console.log("[PilotAI] signIn credential:", cred);
-      console.log("[PilotAI] Firebase ID Token:", token);
+    setIsManualAuth(true);
+    try {
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      const token = await cred.user.getIdToken();
+      setIdToken(token);
+      if (process.env.NODE_ENV === "development") {
+        console.log("[PilotAI] signIn credential:", cred);
+        console.log("[PilotAI] Firebase ID Token:", token);
+      }
+      const data = await createSession(token);
+      handleSessionResponse(data);
+    } finally {
+      setIsManualAuth(false);
     }
-    const data = await createSession(token);
-    handleSessionResponse(data);
   };
 
   const signUp = async (email: string, password: string, _displayName: string) => {
-    const cred = await createUserWithEmailAndPassword(auth, email, password);
-    const token = await cred.user.getIdToken();
-    setIdToken(token);
-    if (process.env.NODE_ENV === "development") {
-      console.log("[PilotAI] signUp credential:", cred);
-      console.log("[PilotAI] Firebase ID Token:", token);
+    setIsManualAuth(true);
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      const token = await cred.user.getIdToken();
+      setIdToken(token);
+      if (process.env.NODE_ENV === "development") {
+        console.log("[PilotAI] signUp credential:", cred);
+        console.log("[PilotAI] Firebase ID Token:", token);
+      }
+      const data = await createSession(token);
+      handleSessionResponse(data);
+    } finally {
+      setIsManualAuth(false);
     }
-    const data = await createSession(token);
-    handleSessionResponse(data);
   };
 
   const signInWithGoogle = async () => {
-    const cred: UserCredential = await signInWithPopup(auth, googleProvider);
-    const token = await cred.user.getIdToken();
-    setIdToken(token);
+    setIsManualAuth(true);
+    try {
+      const cred: UserCredential = await signInWithPopup(auth, googleProvider);
+      const token = await cred.user.getIdToken();
+      setIdToken(token);
 
-    console.log("[PilotAI] Google sign-in credential:", cred);
-    console.log("[PilotAI] Google user:", cred.user);
-    console.log("[PilotAI] Firebase ID Token:", token);
+      console.log("[PilotAI] Google sign-in credential:", cred);
+      console.log("[PilotAI] Google user:", cred.user);
+      console.log("[PilotAI] Firebase ID Token:", token);
 
-    const data = await createSession(token);
-    handleSessionResponse(data);
+      const data = await createSession(token);
+      handleSessionResponse(data);
 
-    if (process.env.NODE_ENV === "development") {
-      console.log("[PilotAI] Session response:", data);
+      if (process.env.NODE_ENV === "development") {
+        console.log("[PilotAI] Session response:", data);
+      }
+    } finally {
+      setIsManualAuth(false);
     }
   };
 

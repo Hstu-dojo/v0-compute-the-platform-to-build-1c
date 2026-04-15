@@ -1,0 +1,3502 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Studley / AI Tutor API",
+    "version": "0.1.0"
+  },
+  "tags": [
+    {
+      "name": "system"
+    },
+    {
+      "name": "admin"
+    },
+    {
+      "name": "auth"
+    },
+    {
+      "name": "billing"
+    },
+    {
+      "name": "payments"
+    },
+    {
+      "name": "credits"
+    },
+    {
+      "name": "upload"
+    },
+    {
+      "name": "documents"
+    },
+    {
+      "name": "study-sets"
+    },
+    {
+      "name": "solve"
+    },
+    {
+      "name": "grader"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "appBearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Use `Authorization: Bearer <APP_ACCESS_TOKEN>`. This is the access token returned by POST /api/v1/auth/session or POST /api/v1/auth/refresh, and is used for protected API calls."
+      }
+    },
+    "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": [
+              "code",
+              "message"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "details": {}
+            }
+          }
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "ok"
+          }
+        }
+      },
+      "AuthSessionRequest": {
+        "type": "object",
+        "required": [
+          "firebase_id_token"
+        ],
+        "properties": {
+          "firebase_id_token": {
+            "type": "string",
+            "description": "Firebase ID token from the Firebase client SDK (sent in the request body for session bootstrap)."
+          },
+          "device_type": {
+            "type": "string",
+            "example": "mobile"
+          },
+          "device_name": {
+            "type": "string",
+            "example": "iPhone 15 Pro"
+          }
+        }
+      },
+      "AuthSessionResponse": {
+        "type": "object",
+        "required": [
+          "user",
+          "session",
+          "auth",
+          "subscription",
+          "token_balance",
+          "is_new_user"
+        ],
+        "properties": {
+          "user": {
+            "type": "object",
+            "required": [
+              "id",
+              "firebase_uid",
+              "email",
+              "display_name",
+              "role",
+              "is_email_verified"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "firebase_uid": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "display_name": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string",
+                "enum": [
+                  "student",
+                  "admin"
+                ],
+                "readOnly": true,
+                "description": "Server-managed role (defaults to student). Clients cannot set this value."
+              },
+              "is_email_verified": {
+                "type": "boolean"
+              },
+              "last_login_at": {
+                "type": "string",
+                "format": "date-time",
+                "nullable": true
+              }
+            }
+          },
+          "session": {
+            "type": "object",
+            "required": [
+              "session_id",
+              "expires_at"
+            ],
+            "properties": {
+              "session_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Session identifier (also used as the refresh token). Store this if you plan to refresh or to logout with a Firebase token (via x-session-id)."
+              },
+              "expires_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When the refresh/session token expires."
+              }
+            }
+          },
+          "auth": {
+            "type": "object",
+            "required": [
+              "token_type",
+              "access_token",
+              "expires_at",
+              "refresh_token",
+              "refresh_expires_at"
+            ],
+            "properties": {
+              "token_type": {
+                "type": "string",
+                "example": "Bearer"
+              },
+              "access_token": {
+                "type": "string",
+                "description": "App access token. Use this as `Authorization: Bearer <access_token>` for protected API calls."
+              },
+              "expires_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Access token expiry timestamp."
+              },
+              "refresh_token": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Refresh token (same value as session.session_id). Send this in POST /api/v1/auth/refresh."
+              },
+              "refresh_expires_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Refresh token expiry timestamp."
+              }
+            }
+          },
+          "subscription": {
+            "type": "object",
+            "required": [
+              "plan",
+              "status",
+              "current_period_end",
+              "billing_interval"
+            ],
+            "properties": {
+              "plan": {
+                "type": "string",
+                "description": "Current plan/package code (e.g. free, pro, or an admin-created package code).",
+                "example": "pro"
+              },
+              "status": {
+                "type": "string"
+              },
+              "current_period_end": {
+                "type": "string",
+                "format": "date-time",
+                "nullable": true
+              },
+              "billing_interval": {
+                "type": "string",
+                "enum": [
+                  "monthly"
+                ]
+              }
+            }
+          },
+          "token_balance": {
+            "type": "integer"
+          },
+          "is_new_user": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AuthRefreshRequest": {
+        "type": "object",
+        "required": [
+          "refresh_token"
+        ],
+        "properties": {
+          "refresh_token": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "UploadTextRequest": {
+        "type": "object",
+        "required": [
+          "title",
+          "text"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "My lecture notes on photosynthesis"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      },
+      "Document": {
+        "type": "object",
+        "required": [
+          "id",
+          "userId",
+          "title",
+          "filename",
+          "contentHash",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "contentHash": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending_embedding",
+              "ready",
+              "failed"
+            ]
+          },
+          "embeddingJobId": {
+            "type": "string",
+            "nullable": true
+          },
+          "r2Path": {
+            "type": "string",
+            "nullable": true
+          },
+          "pageCount": {
+            "type": "integer",
+            "nullable": true
+          },
+          "characterCount": {
+            "type": "integer",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "UploadResponse": {
+        "type": "object",
+        "required": [
+          "document",
+          "embedding_job_id"
+        ],
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/Document"
+          },
+          "embedding_job_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "DocumentsListResponse": {
+        "type": "object",
+        "required": [
+          "data",
+          "next_cursor"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Document"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "DocumentResponse": {
+        "type": "object",
+        "required": [
+          "document"
+        ],
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/Document"
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Health check",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "List users (admin only)",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "role",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "student",
+                "admin"
+              ]
+            }
+          },
+          {
+            "name": "plan",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "description": "Filter by plan/package code (e.g. free, pro)."
+            }
+          },
+          {
+            "name": "is_active",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Users returned"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users/{user_id}": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Get user details (admin only)",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User returned"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Update user flags (admin only)",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "is_active": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "User updated"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/credits/adjust": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Adjust user credits (admin only)",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "user_id",
+                  "amount",
+                  "reason"
+                ],
+                "properties": {
+                  "user_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "amount": {
+                    "type": "integer"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Credits adjusted"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/plans": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "List plans/packages (admin only)",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "include_inactive",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Plans returned"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Create a Stripe-backed plan/package (admin only)",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "code",
+                  "name",
+                  "monthly_credit_allotment"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "example": "starter"
+                  },
+                  "name": {
+                    "type": "string",
+                    "example": "Starter"
+                  },
+                  "monthly_credit_allotment": {
+                    "type": "integer",
+                    "example": 2000
+                  },
+                  "price_monthly": {
+                    "type": "number",
+                    "nullable": true,
+                    "example": 9.99
+                  },
+                  "currency": {
+                    "type": "string",
+                    "example": "usd",
+                    "default": "usd"
+                  },
+                  "is_active": {
+                    "type": "boolean",
+                    "default": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Plan created"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Code already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/credit-packs": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "List credit packs (admin only)",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "include_inactive",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Credit packs returned"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Create a Stripe-backed credit pack (admin only)",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "code",
+                  "name",
+                  "credits",
+                  "price"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "example": "pack_1000"
+                  },
+                  "name": {
+                    "type": "string",
+                    "example": "1000 Credits"
+                  },
+                  "credits": {
+                    "type": "integer",
+                    "example": 1000
+                  },
+                  "price": {
+                    "type": "number",
+                    "example": 4.99
+                  },
+                  "currency": {
+                    "type": "string",
+                    "example": "usd",
+                    "default": "usd"
+                  },
+                  "is_active": {
+                    "type": "boolean",
+                    "default": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Credit pack created"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Code already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/workers": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "List worker health/status (admin only)",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workers returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "workers"
+                  ],
+                  "properties": {
+                    "workers": {
+                      "type": "object",
+                      "required": [
+                        "active",
+                        "stale"
+                      ],
+                      "properties": {
+                        "active": {
+                          "type": "array",
+                          "items": {
+                            "type": "object"
+                          }
+                        },
+                        "stale": {
+                          "type": "array",
+                          "items": {
+                            "type": "object"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/model-config": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "List model configs (admin only)",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Configs returned"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Create a model config (admin only)",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "task_type",
+                  "provider",
+                  "model_name"
+                ],
+                "properties": {
+                  "task_type": {
+                    "type": "string"
+                  },
+                  "provider": {
+                    "type": "string"
+                  },
+                  "model_name": {
+                    "type": "string"
+                  },
+                  "model_version": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "fallback_model_name": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "fallback_provider": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "token_multiplier": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "rollout_percentage": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100,
+                    "nullable": true
+                  },
+                  "is_active": {
+                    "type": "boolean",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Config created"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/model-config/{config_id}": {
+      "patch": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Update a model config (admin only)",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "config_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "rollout_percentage": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "is_active": {
+                    "type": "boolean"
+                  },
+                  "fallback_model_name": {
+                    "type": "string"
+                  },
+                  "fallback_provider": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Config updated"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/dead-letter-jobs": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "List dead-letter jobs (admin only)",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dead-letter jobs returned"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users/{user_id}/billing": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Get user subscription + invoices (admin only)",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Billing info returned"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users/{user_id}/billing/portal-session": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Create Stripe billing portal session for user (admin only)",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "return_url": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Portal session created"
+          },
+          "400": {
+            "description": "No Stripe customer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users/{user_id}/billing/change-plan": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Change user subscription plan (admin only)",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "plan_id",
+                  "billing_interval"
+                ],
+                "properties": {
+                  "plan_id": {
+                    "type": "string"
+                  },
+                  "billing_interval": {
+                    "type": "string",
+                    "enum": [
+                      "monthly"
+                    ]
+                  },
+                  "proration_behavior": {
+                    "type": "string",
+                    "enum": [
+                      "create_prorations",
+                      "none",
+                      "always_invoice"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Plan changed"
+          },
+          "400": {
+            "description": "No active subscription",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users/{user_id}/billing/invoices/{stripe_invoice_id}/retry": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Retry paying a Stripe invoice (admin only)",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "stripe_invoice_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invoice payment attempted"
+          },
+          "400": {
+            "description": "No Stripe customer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Invoice not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users/{user_id}/billing/refund": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Create a Stripe refund for a payment (admin only)",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "payment_intent_id": {
+                    "type": "string"
+                  },
+                  "charge_id": {
+                    "type": "string"
+                  },
+                  "amount_cents": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Refund created"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users/{user_id}/cancel-subscription": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Cancel user subscription at period end (admin only)",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cancellation scheduled"
+          },
+          "400": {
+            "description": "No active subscription",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users/{user_id}/credits/history": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Get a user credit ledger history (admin only)",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "event_type",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ledger history returned"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/session": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Bootstrap auth session (register-or-login)",
+        "description": "Single entry auth endpoint. Send `firebase_id_token` in the JSON body (a Firebase ID token from the Firebase client SDK). Backend verifies the token using Firebase Admin SDK, syncs profile from Firebase, creates user/subscription if first login, and returns an app access token plus refresh/session token. Use the returned `auth.access_token` as the Bearer token for other protected API calls.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthSessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Existing user session created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSessionResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "New user auto-registered and session created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSessionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Terminate session (logout)",
+        "description": "Logs out the current app session by revoking the session/refresh token (session.session_id). This also immediately invalidates any app access tokens issued for that session (they are checked against the active session in the database). Authenticate using the app access token (from `auth.access_token`).",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Refresh app access token",
+        "description": "No Authorization header required. Provide `refresh_token` (same value as `session.session_id`) to rotate the refresh/session and receive a new `auth.access_token` plus new `session.session_id`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthRefreshRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Token refreshed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSessionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or expired refresh token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Account disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/billing/create-checkout-session": {
+      "post": {
+        "tags": [
+          "billing"
+        ],
+        "summary": "Create a Stripe Checkout Session for a subscription plan",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "planId",
+                  "interval"
+                ],
+                "properties": {
+                  "planId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "interval": {
+                    "type": "string",
+                    "enum": [
+                      "monthly"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Checkout session URL returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "url"
+                  ],
+                  "properties": {
+                    "url": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation Error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/payments/plans": {
+      "get": {
+        "tags": [
+          "payments"
+        ],
+        "summary": "List available subscription plans/packages",
+        "responses": {
+          "200": {
+            "description": "Plans returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "code",
+                          "name",
+                          "monthly_credit_allotment",
+                          "billing_intervals"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "code": {
+                            "type": "string",
+                            "example": "pro"
+                          },
+                          "name": {
+                            "type": "string",
+                            "example": "Pro"
+                          },
+                          "monthly_credit_allotment": {
+                            "type": "integer"
+                          },
+                          "price_monthly": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "billing_intervals": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "monthly"
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/payments/packs": {
+      "get": {
+        "tags": [
+          "payments"
+        ],
+        "summary": "List available one-off credit packs",
+        "responses": {
+          "200": {
+            "description": "Credit packs returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "code",
+                          "name",
+                          "credits",
+                          "price",
+                          "currency"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "code": {
+                            "type": "string",
+                            "example": "pack_1000"
+                          },
+                          "name": {
+                            "type": "string",
+                            "example": "1000 Credits"
+                          },
+                          "credits": {
+                            "type": "integer",
+                            "example": 1000
+                          },
+                          "price": {
+                            "type": "number",
+                            "example": 4.99
+                          },
+                          "currency": {
+                            "type": "string",
+                            "example": "usd"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/payments/create-checkout": {
+      "post": {
+        "tags": [
+          "payments"
+        ],
+        "summary": "Create a Stripe Checkout session for a subscription plan",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "plan_id",
+                  "billing_interval"
+                ],
+                "properties": {
+                  "plan_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "billing_interval": {
+                    "type": "string",
+                    "enum": [
+                      "monthly"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Checkout session created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "checkout_url",
+                    "session_id"
+                  ],
+                  "properties": {
+                    "checkout_url": {
+                      "type": "string"
+                    },
+                    "session_id": {
+                      "type": "string"
+                    },
+                    "expires_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/payments/topup": {
+      "post": {
+        "tags": [
+          "payments"
+        ],
+        "summary": "Purchase a one-off credit pack (Stripe Checkout)",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "topup_pack_id"
+                ],
+                "properties": {
+                  "topup_pack_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Checkout session created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "checkout_url",
+                    "session_id"
+                  ],
+                  "properties": {
+                    "checkout_url": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "session_id": {
+                      "type": "string"
+                    },
+                    "expires_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid pack",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/payments/subscription": {
+      "get": {
+        "tags": [
+          "payments"
+        ],
+        "summary": "Get current subscription and recent invoices",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Subscription returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "subscription",
+                    "invoices"
+                  ],
+                  "properties": {
+                    "subscription": {
+                      "nullable": true,
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "plan",
+                        "status",
+                        "billing_interval"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "plan": {
+                          "type": "object",
+                          "required": [
+                            "name",
+                            "tier",
+                            "monthly_credit_allotment",
+                            "features"
+                          ],
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "tier": {
+                              "type": "string",
+                              "description": "Plan/package code",
+                              "example": "pro"
+                            },
+                            "monthly_credit_allotment": {
+                              "type": "integer"
+                            },
+                            "price_monthly": {
+                              "type": "number",
+                              "nullable": true
+                            },
+                            "features": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "billing_interval": {
+                          "type": "string",
+                          "enum": [
+                            "monthly"
+                          ]
+                        },
+                        "current_period_start": {
+                          "type": "string",
+                          "format": "date-time",
+                          "nullable": true
+                        },
+                        "current_period_end": {
+                          "type": "string",
+                          "format": "date-time",
+                          "nullable": true
+                        },
+                        "cancel_at": {
+                          "type": "string",
+                          "format": "date-time",
+                          "nullable": true
+                        },
+                        "trial_end": {
+                          "type": "string",
+                          "format": "date-time",
+                          "nullable": true
+                        }
+                      }
+                    },
+                    "invoices": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "type",
+                          "status",
+                          "amount_paid",
+                          "currency"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "stripe_invoice_id": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "amount_paid": {
+                            "type": "number"
+                          },
+                          "currency": {
+                            "type": "string"
+                          },
+                          "credits_granted": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "paid_at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                          },
+                          "hosted_invoice_url": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/payments/cancel-subscription": {
+      "post": {
+        "tags": [
+          "payments"
+        ],
+        "summary": "Cancel subscription at end of billing period",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cancellation scheduled"
+          },
+          "400": {
+            "description": "No active subscription",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/payments/webhook": {
+      "post": {
+        "tags": [
+          "payments"
+        ],
+        "summary": "Stripe webhook (public)",
+        "responses": {
+          "200": {
+            "description": "Webhook received"
+          }
+        }
+      }
+    },
+    "/api/v1/credits/balance": {
+      "get": {
+        "tags": [
+          "credits"
+        ],
+        "summary": "Get current credit balance and period usage",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Balance returned."
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/credits/history": {
+      "get": {
+        "tags": [
+          "credits"
+        ],
+        "summary": "Get credit ledger history (cursor paginated)",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "event_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "History page returned."
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/upload/pdf": {
+      "post": {
+        "tags": [
+          "upload"
+        ],
+        "summary": "Upload PDF",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file",
+                  "title"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "title": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Duplicate detected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "File too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/upload/text": {
+      "post": {
+        "tags": [
+          "upload"
+        ],
+        "summary": "Upload raw text",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadTextRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Duplicate detected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "List documents",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending_embedding",
+                "ready",
+                "failed"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentsListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents/{document_id}": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Get document",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Delete document",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message",
+                    "credits_refunded"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    },
+                    "credits_refunded": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/study-sets/generate": {
+      "post": {
+        "tags": [
+          "study-sets"
+        ],
+        "summary": "Generate study set materials (notes, flashcards, multiple choice, etc.)",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "document_id",
+                  "types"
+                ],
+                "properties": {
+                  "document_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "types": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "notes",
+                        "content",
+                        "tutor_lesson",
+                        "flashcards",
+                        "multiple_choice",
+                        "fill_in_blanks",
+                        "written_test",
+                        "podcast"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Batch created, jobs enqueued, websocket token returned."
+          },
+          "400": {
+            "description": "Validation Error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/study-sets/batch/{batch_id}": {
+      "get": {
+        "tags": [
+          "study-sets"
+        ],
+        "summary": "Get study set batch status",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "batch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Batch details."
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/study-sets/output/{output_id}/notes": {
+      "get": {
+        "tags": [
+          "study-sets"
+        ],
+        "summary": "Get generated notes output",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "output_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Notes output"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/study-sets/output/{output_id}/notes/stream": {
+      "get": {
+        "tags": [
+          "study-sets"
+        ],
+        "summary": "Stream generated notes output (SSE)",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "output_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SSE stream"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/study-sets/output/{output_id}/flashcards": {
+      "get": {
+        "tags": [
+          "study-sets"
+        ],
+        "summary": "Get generated flashcards output",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "output_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Flashcards output"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/study-sets/output/{output_id}/multiple_choice": {
+      "get": {
+        "tags": [
+          "study-sets"
+        ],
+        "summary": "Get generated multiple choice output",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "output_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Multiple choice output"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/study-sets/output/{output_id}/fill_in_blanks": {
+      "get": {
+        "tags": [
+          "study-sets"
+        ],
+        "summary": "Get generated fill in blanks output",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "output_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Fill in blanks output"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/study-sets/output/{output_id}/written_test": {
+      "get": {
+        "tags": [
+          "study-sets"
+        ],
+        "summary": "Get generated written test output",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "output_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Written test output"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/study-sets/output/{output_id}/tutor_lesson": {
+      "get": {
+        "tags": [
+          "study-sets"
+        ],
+        "summary": "Get generated tutor lesson output",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "output_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tutor lesson output"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/study-sets/output/{output_id}/podcast": {
+      "get": {
+        "tags": [
+          "study-sets"
+        ],
+        "summary": "Get generated podcast output",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "output_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Podcast output"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/study-sets/output/{output_id}/content": {
+      "get": {
+        "tags": [
+          "study-sets"
+        ],
+        "summary": "Get generated content (study guide) output",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "output_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Content output"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/solve": {
+      "post": {
+        "tags": [
+          "solve"
+        ],
+        "summary": "Solve a single question (browser extension endpoint)",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "question"
+                ],
+                "properties": {
+                  "question": {
+                    "type": "string"
+                  },
+                  "context_type": {
+                    "type": "string"
+                  },
+                  "subject_hint": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Answer returned."
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "402": {
+            "description": "Insufficient credits"
+          }
+        }
+      }
+    },
+    "/api/v1/grader/submit": {
+      "post": {
+        "tags": [
+          "grader"
+        ],
+        "summary": "Submit a rubric + assignment for grading",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "rubric_file",
+                  "assignment_file",
+                  "title"
+                ],
+                "properties": {
+                  "rubric_file": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "assignment_file": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "title": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Submission accepted and queued."
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "402": {
+            "description": "Insufficient credits"
+          }
+        }
+      }
+    },
+    "/api/v1/grader/result/{submission_id}": {
+      "get": {
+        "tags": [
+          "grader"
+        ],
+        "summary": "Get grader result for a submission",
+        "security": [
+          {
+            "appBearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Result returned (or still processing)."
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    }
+  }
+}
