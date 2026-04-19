@@ -254,17 +254,52 @@ export interface Document {
   updatedAt: string;
 }
 
+export type StudySetType = 
+  | "notes" 
+  | "content" 
+  | "tutor_lesson" 
+  | "flashcards" 
+  | "multiple_choice" 
+  | "fill_in_blanks" 
+  | "written_test" 
+  | "podcast";
+
 export interface BatchJob {
-  id: string;
-  output_type: string;
+  job_id: string;
+  type: StudySetType;
   status: "queued" | "processing" | "completed" | "failed";
   output_id: string | null;
   error?: string | null;
+  estimated_credits?: number | null;
+  credits_consumed?: number | null;
+  completed_at?: string | null;
 }
 
-export interface BatchStatus {
-  batch_id: string;
-  status: "processing" | "completed" | "partially_completed" | "failed";
+export interface Batch {
+  id: string;
+  document_id: string;
+  status: "processing" | "completed" | "failed" | "partial";
+  total_jobs: number;
+  completed_jobs: number;
+  failed_jobs: number;
+  selected_types?: StudySetType[];
+  estimated_credits?: number;
+  created_at: string;
+  completed_at?: string | null;
+}
+
+export interface StudySetGenerateResponse {
+  batch: Batch;
+  jobs: BatchJob[];
+  websocket: {
+    url: string;
+    token: string;
+    expires_in: number;
+  };
+}
+
+export interface StudySetBatchStatusResponse {
+  batch: Batch;
   jobs: BatchJob[];
 }
 
@@ -459,12 +494,12 @@ export async function uploadText(body: { title: string; text: string }): Promise
 export async function generateStudySet(body: {
   document_id: string;
   types: string[];
-}): Promise<{ batch_id: string }> {
-  return apiPost<{ batch_id: string }>("/api/v1/study-sets/generate", body);
+}): Promise<StudySetGenerateResponse> {
+  return apiPost<StudySetGenerateResponse>("/api/v1/study-sets/generate", body);
 }
 
-export async function getBatchStatus(batchId: string): Promise<BatchStatus> {
-  return apiGet<BatchStatus>(`/api/v1/study-sets/batch/${batchId}`);
+export async function getBatchStatus(batchId: string): Promise<StudySetBatchStatusResponse> {
+  return apiGet<StudySetBatchStatusResponse>(`/api/v1/study-sets/batch/${batchId}`);
 }
 
 export async function getOutputContent(outputId: string, type: string): Promise<unknown> {

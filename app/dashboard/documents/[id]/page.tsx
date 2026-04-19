@@ -12,7 +12,9 @@ import {
   getOutputContent,
   type Document,
   type BatchJob,
-  type BatchStatus,
+  type StudySetBatchStatusResponse,
+  type StudySetGenerateResponse,
+  type StudySetType,
   type Flashcard,
   type MCQQuestion,
   type FillBlankItem,
@@ -109,7 +111,7 @@ export default function DocumentPage() {
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
 
-  const [batch, setBatch] = useState<BatchStatus | null>(null);
+  const [batch, setBatch] = useState<StudySetBatchStatusResponse | null>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
 
   const [activeTab, setActiveTab] = useState<string | null>(null);
@@ -132,7 +134,7 @@ export default function DocumentPage() {
     try {
       const status = await getBatchStatus(batchId);
       setBatch(status);
-      const allDone = status.jobs.every((j) => j.status === "completed" || j.status === "failed");
+      const allDone = ["completed", "failed", "partial"].includes(status.batch.status);
       if (allDone) stopPolling();
     } catch (e) {
       console.error("Poll error:", e);
@@ -141,6 +143,23 @@ export default function DocumentPage() {
 
   useEffect(() => () => stopPolling(), [stopPolling]);
 
+  const handleRetryJob = async (type: StudySetType) => {
+    setGenError(null);
+    setGenerating(true);
+    // Notice we do NOT clear the activeTab or output cache for other jobs
+    try {
+      const res = await generateStudySet({ document_id: docId, types: [type] });
+      const batchId = res.batch.id;
+      // Start polling the new batch
+      pollRef.current = setInterval(() => pollBatch(batchId), 3000);
+      await pollBatch(batchId);
+    } catch (e) {
+      setGenError(e instanceof Error ? e.message : "Retry failed");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const handleGenerate = async () => {
     setGenError(null);
     setGenerating(true);
@@ -148,9 +167,9 @@ export default function DocumentPage() {
     setActiveTab(null);
     setOutputCache({});
     try {
-      const types = [...selectedTypes].filter((t) => t !== "podcast");
+      const types = [...selectedTypes].filter((t) => t !== "podcast") as StudySetType[];
       const res = await generateStudySet({ document_id: docId, types });
-      const batchId = res.batch_id;
+      const batchId = res.batch.id;
       await pollBatch(batchId);
       pollRef.current = setInterval(() => pollBatch(batchId), 3000);
     } catch (e) {
@@ -161,7 +180,7 @@ export default function DocumentPage() {
   };
 
   const loadOutput = useCallback(async (job: BatchJob) => {
-    const type = job.output_type;
+    const type = job.type;
     if (!job.output_id || outputCache[type] !== undefined) return;
 
     setOutputLoading((l) => ({ ...l, [type]: true }));
@@ -177,7 +196,7 @@ export default function DocumentPage() {
   }, [outputCache]);
 
   const handleTabClick = useCallback((job: BatchJob) => {
-    setActiveTab(job.output_type);
+    setActiveTab(job.type);
     loadOutput(job);
   }, [loadOutput]);
 
@@ -366,15 +385,43 @@ export default function DocumentPage() {
                   New batch
                 </button>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
                 {batch.jobs.map((job) => (
-                  <div key={job.id} className="flex items-center justify-between px-3 py-2.5 rounded-xl border border-foreground/10 bg-foreground/[0.02]">
-                    <span className="text-sm text-foreground capitalize">
-                      {OUTPUT_TYPES.find((t) => t.id === job.output_type)?.label ?? job.output_type}
-                    </span>
-                    <JobStatusBadge status={job.status} />
+                  <div key={job.job_id} className="flex flex-col gap-2 px-4 py-3 rounded-xl border border-foreground/10 bg-foreground/[0.02]">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-foreground capitalize">
+                        {OUTPUT_TYPES.find((t) => t.id === job.type)?.label ?? job.type}
+                      </span>
+                      <JobStatusBadge status={job.status} />
+                    </div>
+                    
+                    {(job.estimated_credits != null || job.credits_consumed != null) && (
+                      <div className="flex items-center text-[11px] font-mono text-muted-foreground gap-4 bg-foreground/5 py-1 px-2 rounded-md w-fit">
+                        {job.estimated_credits != null && (
+                          <span title="Estimated credits before run">Est: {job.estimated_credits}</span>
+                        )}
+                        {job.credits_consumed != null && (
+                          <span title="Actual credits consumed">Used: {job.credits_consumed}</span>
+                        )}
+                      </div>
+                    )}
+                    
+                    {job.status === "failed" && (
+                      <button
+                        onClick={() => handleRetryJob(job.type)}
+                        disabled={generating}
+                        className="mt-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-background bg-foreground rounded-lg hover:bg-foreground/90 disabled:opacity-50 transition-colors w-full sm:w-auto self-start"
+                      >
+                        {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : "Retry generation"}
+                      </button>
+                    )}
                   </div>
                 ))}
+              </div>
+
+              <div className="text-[11px] text-muted-foreground/70 mb-8 border border-foreground/10 rounded-lg p-3 bg-foreground/5">
+                <p className="font-medium text-foreground/80 mb-1">Pricing & Tokens Info</p>
+                <p>Generation consumes credits based on token usage. A higher token multiplier might apply depending on the AI model chosen. 1 credit covers approximately 1,000 baseline tokens. Unused text will not consume extra credits, and failed jobs generally refund their estimated credits automatically.</p>
               </div>
 
               {/* Output tabs */}
@@ -382,11 +429,11 @@ export default function DocumentPage() {
                 <div>
                   <div className="flex gap-1 flex-wrap mb-4">
                     {completedJobs.map((job) => {
-                      const label = OUTPUT_TYPES.find((t) => t.id === job.output_type)?.label ?? job.output_type;
-                      const isActive = activeTab === job.output_type;
+                      const label = OUTPUT_TYPES.find((t) => t.id === job.type)?.label ?? job.type;
+                      const isActive = activeTab === job.type;
                       return (
                         <button
-                          key={job.id}
+                          key={job.job_id}
                           onClick={() => handleTabClick(job)}
                           className={`h-8 px-3.5 rounded-lg text-sm transition-all ${
                             isActive
