@@ -225,16 +225,20 @@ export interface AuthSessionResponse {
 }
 
 export interface CreditBalance {
-  balance: number;
+  balance?: number;
+  token_balance?: number;
   period_used?: number;
   currency?: string;
 }
 
 export interface CreditLedgerEntry {
   id: string;
-  event_type: string;
-  amount: number;
-  balance_after: number;
+  event_type?: string;
+  type?: string;
+  amount?: number;
+  tokens?: number;
+  balance_after?: number;
+  token_balance_after?: number;
   description?: string | null;
   created_at: string;
 }
