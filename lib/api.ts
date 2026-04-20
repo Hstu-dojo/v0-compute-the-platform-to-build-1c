@@ -303,6 +303,11 @@ export interface StudySetBatchStatusResponse {
   jobs: BatchJob[];
 }
 
+export interface DocumentBatchesResponse {
+  batches: StudySetBatchStatusResponse[];
+  next_cursor?: string | null;
+}
+
 export interface Flashcard {
   front: string;
   back: string;
@@ -500,6 +505,10 @@ export async function generateStudySet(body: {
 
 export async function getBatchStatus(batchId: string): Promise<StudySetBatchStatusResponse> {
   return apiGet<StudySetBatchStatusResponse>(`/api/v1/study-sets/batch/${batchId}`);
+}
+
+export async function getDocumentBatches(documentId: string): Promise<DocumentBatchesResponse> {
+  return apiGet<DocumentBatchesResponse>(`/api/v1/documents/${documentId}/batches`);
 }
 
 export async function getOutputContent(outputId: string, type: string): Promise<unknown> {

@@ -7,9 +7,11 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
   getDocument,
+  getDocumentBatches,
   generateStudySet,
   getBatchStatus,
   getOutputContent,
+  type DocumentBatchesResponse,
   type Document,
   type BatchJob,
   type StudySetBatchStatusResponse,
@@ -121,7 +123,29 @@ export default function DocumentPage() {
 
   useEffect(() => {
     getDocument(docId)
-      .then((res) => setDoc(res.document))
+      .then((res) => {
+        setDoc(res.document);
+        getDocumentBatches(docId).then((batchesRes) => {
+          if (batchesRes.batches && batchesRes.batches.length > 0) {
+            // Merge all historical jobs onto the latest batch envelope, so all past tasks appear 
+            const sortedBatches = batchesRes.batches;
+            const mergedJobs = new Map<StudySetType, BatchJob>();
+            
+            // Iterate from oldest to newest so newest overwrites older jobs of the same type
+            // Assuming [0] is newest from the API, we reverse:
+            [...sortedBatches].reverse().forEach(b => {
+              b.jobs.forEach(j => mergedJobs.set(j.type, j));
+            });
+
+            setBatch({
+              batch: sortedBatches[0].batch,
+              jobs: Array.from(mergedJobs.values())
+            });
+          }
+        }).catch(err => {
+          console.error("Failed to load document batches:", err);
+        });
+      })
       .catch((e) => setDocError(e.message))
       .finally(() => setDocLoading(false));
   }, [docId]);
@@ -133,7 +157,19 @@ export default function DocumentPage() {
   const pollBatch = useCallback(async (batchId: string) => {
     try {
       const status = await getBatchStatus(batchId);
-      setBatch(status);
+      setBatch(prev => {
+        if (!prev) return status;
+        
+        // Merge jobs: newly fetched status jobs overwrite existing ones of the same type.
+        // This ensures the visual list acts as a unified history pane for this document.
+        const existingJobsMap = new Map(prev.jobs.map(j => [j.type, j]));
+        status.jobs.forEach(j => existingJobsMap.set(j.type, j));
+
+        return {
+          batch: status.batch,
+          jobs: Array.from(existingJobsMap.values())
+        };
+      });
       const allDone = ["completed", "failed", "partial"].includes(status.batch.status);
       if (allDone) stopPolling();
     } catch (e) {
@@ -163,13 +199,23 @@ export default function DocumentPage() {
   const handleGenerate = async () => {
     setGenError(null);
     setGenerating(true);
-    setBatch(null);
+    // Don't fully clear `setBatch(null)` so previously generated items remain visible!
+    // But we do clear activeTab/cache for fresh view if we wanted, or just strictly clear the items being re-generated.
+    // For now we can keep cache unless a specific type is re-generated. Let's just clear active tab so user sees the new progress grids
     setActiveTab(null);
-    setOutputCache({});
     try {
       const types = [...selectedTypes].filter((t) => t !== "podcast") as StudySetType[];
+      
+      // Wipe only the outputs being actively regenerated from old cache
+      setOutputCache(prev => {
+        const next = { ...prev };
+        types.forEach(t => delete next[t]);
+        return next;
+      });
+
       const res = await generateStudySet({ document_id: docId, types });
       const batchId = res.batch.id;
+      // Fetch immediately to overlay the new pending jobs over the historical list
       await pollBatch(batchId);
       pollRef.current = setInterval(() => pollBatch(batchId), 3000);
     } catch (e) {
