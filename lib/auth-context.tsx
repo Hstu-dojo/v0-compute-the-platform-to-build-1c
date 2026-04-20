@@ -79,13 +79,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const token = await firebaseUser.getIdToken();
         setIdToken(token);
 
-        // If we already have an app token, treat this as authenticated.
-        if (getAccessToken()) {
-          setUser(firebaseUser);
-          setLoading(false);
-          return;
-        }
-
         // If a manual sign-in flow is already bootstrapping a session, don't do it again.
         if (manualAuthInProgressRef.current) {
           setUser(firebaseUser);
