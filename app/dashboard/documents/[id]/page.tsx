@@ -85,18 +85,27 @@ function MarkdownContent({ content }: { content: string }) {
 function extractContent(data: unknown, type: OutputTypeId): string | Flashcard[] | MCQQuestion[] | FillBlankItem[] | null {
   if (!data || typeof data !== "object") return null;
   const d = data as Record<string, unknown>;
+  const c = d.content as Record<string, unknown> | undefined;
+
+  if (!c) {
+    if (MARKDOWN_TYPES.includes(type)) return (d.content ?? d.text ?? d.notes ?? "") as string;
+    if (type === "flashcards") return (d.flashcards ?? d.cards ?? []) as Flashcard[];
+    if (type === "multiple_choice") return (d.questions ?? d.multiple_choice ?? []) as MCQQuestion[];
+    if (type === "fill_in_blanks") return (d.exercises ?? d.items ?? d.fill_in_blanks ?? []) as FillBlankItem[];
+    return null;
+  }
 
   if (MARKDOWN_TYPES.includes(type)) {
-    return (d.content ?? d.text ?? d.notes ?? "") as string;
+    return (c.markdown ?? "") as string;
   }
   if (type === "flashcards") {
-    return (d.flashcards ?? d.cards ?? []) as Flashcard[];
+    return (c.cards ?? []) as Flashcard[];
   }
   if (type === "multiple_choice") {
-    return (d.questions ?? d.multiple_choice ?? []) as MCQQuestion[];
+    return (c.questions ?? []) as MCQQuestion[];
   }
   if (type === "fill_in_blanks") {
-    return (d.exercises ?? d.items ?? d.fill_in_blanks ?? []) as FillBlankItem[];
+    return (c.questions ?? []) as FillBlankItem[];
   }
   return null;
 }

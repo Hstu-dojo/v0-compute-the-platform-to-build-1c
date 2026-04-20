@@ -26,7 +26,9 @@ export function FillBlanksViewer({ items }: FillBlanksViewerProps) {
   };
 
   const correct = (i: number): boolean => {
-    return (userAnswers[i] ?? "").trim().toLowerCase() === items[i].answer.trim().toLowerCase();
+    const item = items[i];
+    const answerStr = item.blanks && item.blanks.length > 0 ? item.blanks[0].answer : (item as any).answer;
+    return (userAnswers[i] ?? "").trim().toLowerCase() === (answerStr || "").trim().toLowerCase();
   };
 
   const score = items.filter((_, i) => checked[i] && correct(i)).length;
@@ -40,20 +42,39 @@ export function FillBlanksViewer({ items }: FillBlanksViewerProps) {
 
   const renderSentence = (item: FillBlankItem, idx: number) => {
     const sentence = item.sentence;
-    const placeholder = item.blank ?? "_____";
+    const placeholder = (item as any).blank ?? "____";
     const parts = sentence.split(placeholder);
 
     if (parts.length < 2) {
+      // Maybe the backend uses something else like ____ (4 underscores instead of 5)?
+      // Let's try splitting by different underscores
+      const altParts = sentence.split(/____+/);
+      if (altParts.length < 2) {
+        return (
+          <span>
+            {sentence}{" "}
+            <input
+              type="text"
+              value={userAnswers[idx] ?? ""}
+              onChange={(e) => setAnswer(idx, e.target.value)}
+              placeholder="your answer"
+              className="inline-block border border-foreground/30 rounded bg-transparent text-foreground text-sm px-2 focus:outline-none focus:border-foreground w-32"
+            />
+          </span>
+        );
+      }
       return (
         <span>
-          {sentence}{" "}
+          {altParts[0]}
           <input
             type="text"
             value={userAnswers[idx] ?? ""}
             onChange={(e) => setAnswer(idx, e.target.value)}
             placeholder="your answer"
-            className="inline-block border-b border-foreground/30 bg-transparent text-foreground text-sm px-1 focus:outline-none focus:border-foreground w-32"
+            className="inline-block border-b border-foreground/30 bg-transparent text-foreground text-sm px-1 focus:outline-none focus:border-foreground w-32 mx-1 text-center"
+            disabled={submitted || !!checked[idx]}
           />
+          {altParts.slice(1).join("____")}
         </span>
       );
     }
@@ -65,8 +86,8 @@ export function FillBlanksViewer({ items }: FillBlanksViewerProps) {
           type="text"
           value={userAnswers[idx] ?? ""}
           onChange={(e) => setAnswer(idx, e.target.value)}
-          placeholder="________"
-          className="inline-block border-b border-foreground/30 bg-transparent text-foreground text-sm px-1 focus:outline-none focus:border-foreground w-32 mx-1"
+          placeholder="your answer"
+          className="inline-block border-b border-foreground/30 bg-transparent text-foreground text-sm px-1 focus:outline-none focus:border-foreground w-32 mx-1 text-center"
           disabled={submitted || !!checked[idx]}
         />
         {parts.slice(1).join(placeholder)}
@@ -94,7 +115,7 @@ export function FillBlanksViewer({ items }: FillBlanksViewerProps) {
               </p>
             </div>
             {item.context && (
-              <p className="text-xs text-muted-foreground ml-6 mb-2 italic">{item.context}</p>
+              <p className="text-xs text-muted-foreground ml-6 mb-2 italic">{(item as any).context}</p>
             )}
             {!isChecked ? (
               <button
@@ -105,11 +126,13 @@ export function FillBlanksViewer({ items }: FillBlanksViewerProps) {
                 Check
               </button>
             ) : (
-              <div className="ml-6 text-xs">
+              <div className="ml-6 text-xs mt-3">
                 {isCorrect ? (
-                  <span className="text-green-500">Correct!</span>
+                  <span className="text-green-500 font-medium">✓ Correct!</span>
                 ) : (
-                  <span className="text-red-400">Answer: <strong>{item.answer}</strong></span>
+                  <span className="text-red-400">
+                    Expected answer: <strong className="ml-1 opacity-90">{item.blanks && item.blanks.length > 0 ? item.blanks[0].answer : (item as any).answer}</strong>
+                  </span>
                 )}
               </div>
             )}

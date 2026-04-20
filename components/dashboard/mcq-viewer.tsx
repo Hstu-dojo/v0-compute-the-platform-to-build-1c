@@ -12,9 +12,12 @@ function getOptionText(opt: string | MCQOption): string {
 }
 
 function isCorrect(q: MCQQuestion, idx: number): boolean {
-  if (q.correct_index !== undefined) return idx === q.correct_index;
   const opt = q.options[idx];
-  if (typeof opt === "object" && "is_correct" in opt) return !!opt.is_correct;
+  if (typeof opt === "object" && 'id' in opt && q.correct_option) {
+    return opt.id === q.correct_option;
+  }
+  if (q.correct_index !== undefined) return idx === q.correct_index;
+  if (typeof opt === "object" && "is_correct" in opt) return !!(opt as any).is_correct;
   if (q.correct_answer !== undefined) {
     return getOptionText(q.options[idx]).trim().toLowerCase() === q.correct_answer.trim().toLowerCase();
   }

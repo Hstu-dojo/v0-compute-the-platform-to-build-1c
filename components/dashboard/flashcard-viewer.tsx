@@ -75,7 +75,7 @@ export function FlashcardViewer({ flashcards }: FlashcardViewerProps) {
             style={{ backfaceVisibility: "hidden" }}
           >
             <span className="text-[10px] font-mono text-muted-foreground mb-4">QUESTION — tap to reveal</span>
-            <p className="text-xl font-display text-foreground text-center leading-relaxed">{card.front}</p>
+            <p className="text-xl font-display text-foreground text-center leading-relaxed">{card.term || (card as any).front}</p>
           </div>
           {/* Back */}
           <div
@@ -83,7 +83,7 @@ export function FlashcardViewer({ flashcards }: FlashcardViewerProps) {
             style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
           >
             <span className="text-[10px] font-mono text-muted-foreground mb-4">ANSWER</span>
-            <p className="text-lg text-foreground text-center leading-relaxed">{card.back}</p>
+            <p className="text-lg text-foreground text-center leading-relaxed">{card.definition || (card as any).back}</p>
           </div>
         </div>
       </div>

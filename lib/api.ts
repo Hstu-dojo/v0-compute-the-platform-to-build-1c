@@ -309,28 +309,28 @@ export interface DocumentBatchesResponse {
 }
 
 export interface Flashcard {
-  front: string;
-  back: string;
+  id?: string;
+  term: string;
+  definition: string;
 }
 
 export interface MCQOption {
+  id: string;
   text: string;
-  is_correct?: boolean;
 }
 
 export interface MCQQuestion {
+  id?: string;
   question: string;
-  options: string[] | MCQOption[];
-  correct_index?: number;
-  correct_answer?: string;
+  options: MCQOption[];
+  correct_option: string;
   explanation?: string;
 }
 
 export interface FillBlankItem {
+  id?: string;
   sentence: string;
-  blank?: string;
-  answer: string;
-  context?: string;
+  blanks: { position: number; answer: string }[];
 }
 
 export interface Plan {
