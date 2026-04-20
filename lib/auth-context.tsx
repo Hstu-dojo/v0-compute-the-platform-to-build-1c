@@ -164,12 +164,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       console.log("[PilotAI] Google sign-in credential:", cred);
       console.log("[PilotAI] Google user:", cred.user);
-      console.log("[PilotAI] Firebase ID Token:", token);
+      console.log(`[PilotAI] Firebase ID Token (len: ${token.length}):`, token.slice(0, 30) + '...');
 
       const data = await bootstrapSession(token);
       handleSessionResponse(data);
 
       if (process.env.NODE_ENV === "development") {
+        console.log(`[PilotAI] Backend App Access Token (len: ${data.auth?.access_token?.length}):`, data.auth?.access_token?.slice(0, 30) + '...');
         console.log("[PilotAI] Session response:", data);
       }
     } catch (error) {

@@ -43,7 +43,11 @@ function DevTokenPanelInner() {
             "Content-Type": "application/json",
             Authorization: `Bearer ${idToken}`,
           },
-          body: JSON.stringify({ device_type: "web", device_name: "PilotAI Dev Panel" }),
+          body: JSON.stringify({ 
+            firebase_id_token: idToken,
+            device_type: "web", 
+            device_name: "PilotAI Dev Panel" 
+          }),
         }
       );
       const data = await res.json();

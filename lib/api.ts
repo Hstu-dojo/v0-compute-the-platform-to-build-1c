@@ -425,6 +425,7 @@ export async function createSession(firebaseIdToken: string): Promise<AuthSessio
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "Authorization": `Bearer ${firebaseIdToken}`,
     },
     body: JSON.stringify({ 
       firebase_id_token: firebaseIdToken,
