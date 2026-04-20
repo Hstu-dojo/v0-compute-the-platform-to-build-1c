@@ -6,7 +6,12 @@ import { getCredits, getCreditHistory, type CreditBalance, type CreditLedgerEntr
 import { Zap, AlertCircle, ChevronDown } from "lucide-react";
 
 function fmtDate(s: string) {
-  return new Date(s).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  if (!s) return '—';
+  try {
+    return new Date(s).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return '—';
+  }
 }
 
 const EVENT_COLORS: Record<string, string> = {
@@ -34,8 +39,8 @@ export default function CreditsPage() {
         getCreditHistory({ limit: 30 }),
       ]);
       setBalance(bal);
-      setEntries(hist.data ?? []);
-      setCursor(hist.next_cursor ?? null);
+      setEntries(hist?.data ?? []);
+      setCursor(hist?.next_cursor ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load credit history");
     } finally {
@@ -50,8 +55,8 @@ export default function CreditsPage() {
     setLoadingMore(true);
     try {
       const hist = await getCreditHistory({ limit: 30, cursor });
-      setEntries((prev) => [...prev, ...(hist.data ?? [])]);
-      setCursor(hist.next_cursor ?? null);
+      setEntries((prev) => [...prev, ...(hist?.data ?? [])]);
+      setCursor(hist?.next_cursor ?? null);
     } catch {
       // ignore
     } finally {
@@ -81,7 +86,7 @@ export default function CreditsPage() {
             <div className="h-9 w-28 rounded bg-foreground/10 animate-pulse" />
           ) : (
             <p className="text-4xl font-display text-foreground">
-              {balance?.balance.toLocaleString() ?? "—"}
+              {typeof balance?.balance === 'number' ? balance.balance.toLocaleString() : "—"}
               <span className="text-lg text-muted-foreground ml-2">credits</span>
             </p>
           )}
@@ -126,7 +131,7 @@ export default function CreditsPage() {
                     const isPositive = entry.amount > 0;
                     return (
                       <tr key={entry.id} className="hover:bg-foreground/[0.02] transition-colors">
-                        <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{fmtDate(entry.created_at)}</td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{entry.created_at ? fmtDate(entry.created_at) : '—'}</td>
                         <td className="px-4 py-3">
                           <p className={`text-xs font-mono capitalize ${color}`}>
                             {entry.event_type?.replace(/_/g, " ") ?? "—"}
@@ -136,10 +141,10 @@ export default function CreditsPage() {
                           )}
                         </td>
                         <td className={`px-4 py-3 text-right font-mono text-sm ${isPositive ? "text-green-400" : "text-red-400"}`}>
-                          {isPositive ? "+" : ""}{entry.amount.toLocaleString()}
+                          {isPositive ? "+" : ""}{typeof entry.amount === 'number' ? entry.amount.toLocaleString() : '0'}
                         </td>
                         <td className="px-4 py-3 text-right font-mono text-sm text-muted-foreground">
-                          {entry.balance_after.toLocaleString()}
+                          {typeof entry.balance_after === 'number' ? entry.balance_after.toLocaleString() : '—'}
                         </td>
                       </tr>
                     );
