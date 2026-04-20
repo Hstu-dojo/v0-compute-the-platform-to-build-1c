@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AdminRoute } from "@/components/admin/admin-route";
-import { Users, Package, Coins, Activity, Cpu, Mail, LayoutDashboard, ChevronLeft } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
+import { Users, Package, Coins, Activity, Cpu, Mail, LayoutDashboard, ChevronLeft, BookOpen, ExternalLink } from "lucide-react";
 
 const navItems = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard, exact: true },
@@ -17,6 +18,7 @@ const navItems = [
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { idToken } = useAuth();
 
   return (
     <AdminRoute>
@@ -46,6 +48,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 </Link>
               );
             })}
+            <div className="pt-2 mt-2">
+              <a
+                href={`https://tutor-ai.up.railway.app/api/v1/docs/login?token=${idToken}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 transition-colors mt-2"
+              >
+                <BookOpen className="w-4 h-4 shrink-0" />
+                API Docs
+                <ExternalLink className="w-3 h-3 ml-auto opacity-50" />
+              </a>
+            </div>
           </nav>
         </aside>
         <div className="flex-1 overflow-auto">{children}</div>
