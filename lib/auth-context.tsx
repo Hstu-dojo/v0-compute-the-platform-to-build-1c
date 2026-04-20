@@ -123,6 +123,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       const data = await bootstrapSession(token);
       handleSessionResponse(data);
+    } catch (error) {
+      console.error("[PilotAI] Sign-in failed:", error);
+      setLoading(false);
+      throw error;
     } finally {
       manualAuthInProgressRef.current = false;
     }
@@ -141,6 +145,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       const data = await bootstrapSession(token);
       handleSessionResponse(data);
+    } catch (error) {
+      console.error("[PilotAI] Sign-up failed:", error);
+      setLoading(false);
+      throw error;
     } finally {
       manualAuthInProgressRef.current = false;
     }
@@ -164,6 +172,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (process.env.NODE_ENV === "development") {
         console.log("[PilotAI] Session response:", data);
       }
+    } catch (error) {
+      console.error("[PilotAI] Google sign-in failed:", error);
+      setLoading(false);
+      throw error;
     } finally {
       manualAuthInProgressRef.current = false;
     }
