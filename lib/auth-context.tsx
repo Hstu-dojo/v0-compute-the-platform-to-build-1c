@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
 import {
   auth,
   googleProvider,
@@ -34,7 +34,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [idToken, setIdToken] = useState<string | null>(null);
   const [sessionData, setSessionData] = useState<AuthSessionResponse | null>(null);
 
-  const [isManualAuth, setIsManualAuth] = useState(false);
+  // Prevent duplicate /auth/session bootstraps.
+  // This happens because Firebase triggers onAuthStateChanged during sign-in,
+  // while our manual sign-in flow also calls createSession().
+  const manualAuthInProgressRef = useRef(false);
+  const sessionBootstrapPromiseRef = useRef<Promise<AuthSessionResponse> | null>(null);
 
   const handleSessionResponse = (data: AuthSessionResponse) => {
     storeTokens(data.auth);
@@ -59,24 +63,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return token;
   }, []);
 
+  const bootstrapSession = useCallback(async (firebaseIdToken: string): Promise<AuthSessionResponse> => {
+    if (sessionBootstrapPromiseRef.current) return sessionBootstrapPromiseRef.current;
+
+    const p = createSession(firebaseIdToken).finally(() => {
+      sessionBootstrapPromiseRef.current = null;
+    });
+    sessionBootstrapPromiseRef.current = p;
+    return p;
+  }, []);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         const token = await firebaseUser.getIdToken();
         setIdToken(token);
+
+        // If we already have an app token, treat this as authenticated.
         if (getAccessToken()) {
           setUser(firebaseUser);
           setLoading(false);
-        } else if (!isManualAuth) {
-          try {
-            const data = await createSession(token);
-            handleSessionResponse(data);
-          } catch (e) {
-            console.error("Failed to restore session", e);
-            setUser(null);
-            handleSignOut();
-            setLoading(false);
-          }
+          return;
+        }
+
+        // If a manual sign-in flow is already bootstrapping a session, don't do it again.
+        if (manualAuthInProgressRef.current) {
+          setUser(firebaseUser);
+          return;
+        }
+
+        try {
+          const data = await bootstrapSession(token);
+          handleSessionResponse(data);
+        } catch (e) {
+          console.error("Failed to restore session", e);
+          setUser(null);
+          handleSignOut();
+          setLoading(false);
         }
       } else {
         setUser(null);
@@ -85,10 +108,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
     return unsubscribe;
-  }, [isManualAuth]);
+  }, [bootstrapSession]);
 
   const signIn = async (email: string, password: string) => {
-    setIsManualAuth(true);
+    manualAuthInProgressRef.current = true;
+    setLoading(true);
     try {
       const cred = await signInWithEmailAndPassword(auth, email, password);
       const token = await cred.user.getIdToken();
@@ -97,15 +121,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log("[PilotAI] signIn credential:", cred);
         console.log("[PilotAI] Firebase ID Token:", token);
       }
-      const data = await createSession(token);
+      const data = await bootstrapSession(token);
       handleSessionResponse(data);
     } finally {
-      setIsManualAuth(false);
+      manualAuthInProgressRef.current = false;
     }
   };
 
   const signUp = async (email: string, password: string, _displayName: string) => {
-    setIsManualAuth(true);
+    manualAuthInProgressRef.current = true;
+    setLoading(true);
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       const token = await cred.user.getIdToken();
@@ -114,15 +139,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log("[PilotAI] signUp credential:", cred);
         console.log("[PilotAI] Firebase ID Token:", token);
       }
-      const data = await createSession(token);
+      const data = await bootstrapSession(token);
       handleSessionResponse(data);
     } finally {
-      setIsManualAuth(false);
+      manualAuthInProgressRef.current = false;
     }
   };
 
   const signInWithGoogle = async () => {
-    setIsManualAuth(true);
+    manualAuthInProgressRef.current = true;
+    setLoading(true);
     try {
       const cred: UserCredential = await signInWithPopup(auth, googleProvider);
       const token = await cred.user.getIdToken();
@@ -132,14 +158,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log("[PilotAI] Google user:", cred.user);
       console.log("[PilotAI] Firebase ID Token:", token);
 
-      const data = await createSession(token);
+      const data = await bootstrapSession(token);
       handleSessionResponse(data);
 
       if (process.env.NODE_ENV === "development") {
         console.log("[PilotAI] Session response:", data);
       }
     } finally {
-      setIsManualAuth(false);
+      manualAuthInProgressRef.current = false;
     }
   };
 
