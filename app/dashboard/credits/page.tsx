@@ -79,7 +79,7 @@ export default function CreditsPage() {
       )}
 
       {/* Balance card */}
-      <div className="p-6 rounded-xl border border-foreground/10 bg-foreground/[0.02] flex items-center justify-between">
+      <div className="p-6 rounded-xl border border-foreground/10 bg-foreground/2 flex items-center justify-between">
         <div>
           <p className="text-xs font-mono text-muted-foreground uppercase tracking-widest mb-2">Current Balance</p>
           {loading ? (
@@ -106,7 +106,7 @@ export default function CreditsPage() {
         {loading ? (
           <div className="space-y-2">
             {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-14 rounded-xl border border-foreground/10 animate-pulse bg-foreground/[0.02]" />
+              <div key={i} className="h-14 rounded-xl border border-foreground/10 animate-pulse bg-foreground/2" />
             ))}
           </div>
         ) : entries.length === 0 ? (
@@ -118,7 +118,7 @@ export default function CreditsPage() {
             <div className="rounded-xl border border-foreground/10 overflow-hidden">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-foreground/10 bg-foreground/[0.02]">
+                  <tr className="border-b border-foreground/10 bg-foreground/2">
                     <th className="px-4 py-3 text-left text-xs font-mono text-muted-foreground">Date</th>
                     <th className="px-4 py-3 text-left text-xs font-mono text-muted-foreground">Event</th>
                     <th className="px-4 py-3 text-right text-xs font-mono text-muted-foreground">Amount</th>
@@ -132,7 +132,7 @@ export default function CreditsPage() {
                     const amt = typeof entry.amount === 'number' ? entry.amount : (typeof (entry as any).tokens === 'number' ? (entry as any).tokens : 0);
                     const isPositive = amt > 0;
                     return (
-                      <tr key={entry.id} className="hover:bg-foreground/[0.02] transition-colors">
+                      <tr key={entry.id} className="hover:bg-foreground/2 transition-colors">
                         <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{entry.created_at ? fmtDate(entry.created_at) : '—'}</td>
                         <td className="px-4 py-3">
                           <p className={`text-xs font-mono capitalize ${color}`}>

@@ -98,7 +98,7 @@ export function MCQViewer({ questions }: MCQViewerProps) {
               })}
             </div>
             {submitted && q.explanation && (
-              <p className="text-xs text-muted-foreground bg-foreground/[0.03] border border-foreground/8 rounded-lg px-3 py-2">
+              <p className="text-xs text-muted-foreground bg-foreground/3 border border-foreground/8 rounded-lg px-3 py-2">
                 {q.explanation}
               </p>
             )}
@@ -115,7 +115,7 @@ export function MCQViewer({ questions }: MCQViewerProps) {
           Submit answers
         </button>
       ) : (
-        <div className="flex items-center gap-4 p-4 rounded-xl border border-foreground/10 bg-foreground/[0.02]">
+        <div className="flex items-center gap-4 p-4 rounded-xl border border-foreground/10 bg-foreground/2">
           <div>
             <p className="text-2xl font-display text-foreground">
               {score} / {questions.length}

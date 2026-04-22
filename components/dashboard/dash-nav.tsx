@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { getCredits, type CreditBalance } from "@/lib/api";
-import { LayoutDashboard, Upload, LogOut, Zap, CreditCard, Clock, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, Upload, LogOut, Zap, CreditCard, Clock, ShieldCheck, BookOpen } from "lucide-react";
 
 export function DashNav() {
   const { user, sessionData, signOut } = useAuth();
@@ -28,10 +28,13 @@ export function DashNav() {
 
   const navItems = [
     { href: "/dashboard", label: "Documents", icon: LayoutDashboard },
+    { href: "/dashboard/study-sets", label: "Study Sets", icon: BookOpen },
     { href: "/dashboard/upload", label: "Upload", icon: Upload },
     { href: "/dashboard/billing", label: "Billing", icon: CreditCard },
     { href: "/dashboard/credits", label: "Credit History", icon: Clock },
   ];
+
+  const creditValue = credits?.balance ?? credits?.token_balance ?? 0;
 
   return (
     <aside className="w-56 shrink-0 border-r border-foreground/10 flex flex-col min-h-screen sticky top-0">
@@ -45,13 +48,13 @@ export function DashNav() {
       <div className="px-4 py-3 border-b border-foreground/10">
         <Link
           href="/dashboard/billing"
-          className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-foreground/[0.03] border border-foreground/8 hover:border-foreground/15 transition-colors group"
+          className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-foreground/3 border border-foreground/8 hover:border-foreground/15 transition-colors group"
         >
           <Zap className="w-3.5 h-3.5 text-muted-foreground shrink-0 group-hover:text-foreground transition-colors" />
           <div className="min-w-0">
             <p className="text-[10px] font-mono text-muted-foreground">Credits</p>
             <p className="text-sm font-display text-foreground leading-none mt-0.5">
-              {credits !== null ? credits.balance.toLocaleString() : "—"}
+              {credits !== null ? creditValue.toLocaleString() : "—"}
             </p>
           </div>
         </Link>

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { getDocuments, type Document } from "@/lib/api";
-import { Upload, FileText, AlertCircle, RefreshCw } from "lucide-react";
+import { Upload, FileText, AlertCircle, RefreshCw, BookOpen } from "lucide-react";
 
 const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   ready: { label: "Ready", cls: "text-green-400 bg-green-500/10 border-green-500/20" },
@@ -60,6 +60,13 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <Link
+            href="/dashboard/study-sets"
+            className="inline-flex items-center gap-2 h-9 px-4 rounded-lg border border-foreground/15 text-foreground text-sm hover:border-foreground/30 transition-colors"
+          >
+            <BookOpen className="w-3.5 h-3.5" />
+            Study Sets
+          </Link>
           <button
             onClick={() => load(true)}
             disabled={refreshing}
@@ -90,7 +97,7 @@ export default function DashboardPage() {
       {loading && !error && (
         <div className="space-y-3">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-20 rounded-xl border border-foreground/10 bg-foreground/[0.02] animate-pulse" />
+            <div key={i} className="h-20 rounded-xl border border-foreground/10 bg-foreground/2 animate-pulse" />
           ))}
         </div>
       )}
@@ -129,7 +136,7 @@ export default function DashboardPage() {
             return (
               <div
                 key={doc.id}
-                className="group flex items-center gap-4 p-4 rounded-xl border border-foreground/10 hover:border-foreground/20 transition-colors bg-foreground/[0.01] hover:bg-foreground/[0.03]"
+                className="group flex items-center gap-4 p-4 rounded-xl border border-foreground/10 hover:border-foreground/20 transition-colors bg-foreground/1 hover:bg-foreground/3"
               >
                 <div className="w-9 h-9 rounded-lg border border-foreground/10 flex items-center justify-center shrink-0">
                   <FileText className="w-4 h-4 text-muted-foreground" />

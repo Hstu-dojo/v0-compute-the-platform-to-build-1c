@@ -141,7 +141,7 @@ export function FillBlanksViewer({ items }: FillBlanksViewerProps) {
       })}
 
       {allChecked && (
-        <div className="flex items-center gap-4 p-4 rounded-xl border border-foreground/10 bg-foreground/[0.02]">
+        <div className="flex items-center gap-4 p-4 rounded-xl border border-foreground/10 bg-foreground/2">
           <div>
             <p className="text-2xl font-display text-foreground">{score} / {items.length}</p>
             <p className="text-sm text-muted-foreground">

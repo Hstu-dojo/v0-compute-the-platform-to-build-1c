@@ -3,21 +3,64 @@
 import { useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { uploadPdf, uploadText } from "@/lib/api";
-import { Upload, FileText, ChevronLeft, AlertCircle, X } from "lucide-react";
+import { SourcesApi, type SourceMaterial } from "@/lib/api-v2";
+import {
+  Upload,
+  FileText,
+  ChevronLeft,
+  AlertCircle,
+  X,
+  Link2,
+  Youtube,
+  CheckCircle2,
+  Clock3,
+} from "lucide-react";
 
-type UploadTab = "pdf" | "text";
+type UploadTab = "pdf" | "text" | "youtube_url";
+
+function normalizeStatus(status?: string): "pending_embedding" | "processing" | "ready" | "failed" {
+  if (status === "ready") return "ready";
+  if (status === "failed") return "failed";
+  if (status === "processing") return "processing";
+  return "pending_embedding";
+}
+
+function statusMeta(status?: string) {
+  const normalized = normalizeStatus(status);
+  if (normalized === "ready") {
+    return {
+      label: "Ready",
+      cls: "text-green-400 bg-green-500/10 border-green-500/20",
+      icon: <CheckCircle2 className="w-3.5 h-3.5" />,
+    };
+  }
+  if (normalized === "failed") {
+    return {
+      label: "Failed",
+      cls: "text-red-400 bg-red-500/10 border-red-500/20",
+      icon: <AlertCircle className="w-3.5 h-3.5" />,
+    };
+  }
+  return {
+    label: "Pending embedding",
+    cls: "text-yellow-400 bg-yellow-500/10 border-yellow-500/20",
+    icon: <Clock3 className="w-3.5 h-3.5" />,
+  };
+}
 
 export default function UploadPage() {
   const router = useRouter();
   const [tab, setTab] = useState<UploadTab>("pdf");
   const [title, setTitle] = useState("");
   const [textContent, setTextContent] = useState("");
+  const [youtubeUrl, setYoutubeUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [loading, setLoading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [createdSource, setCreatedSource] = useState<SourceMaterial | null>(null);
+  const [transcriptSegments, setTranscriptSegments] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -40,28 +83,41 @@ export default function UploadPage() {
 
   const handleSubmit = async () => {
     setError(null);
+    setCreatedSource(null);
+    setTranscriptSegments(null);
     if (!title.trim()) { setError("Please add a title"); return; }
     if (tab === "pdf" && !file) { setError("Please select a PDF file"); return; }
     if (tab === "text" && !textContent.trim()) { setError("Please paste some content"); return; }
+    if (tab === "youtube_url" && !youtubeUrl.trim()) { setError("Please paste a YouTube URL"); return; }
 
     setLoading(true);
     setUploadProgress(null);
     try {
-      let doc;
+      let source: SourceMaterial;
       if (tab === "pdf") {
         const fd = new FormData();
         fd.append("file", file!);
         fd.append("title", title.trim());
         setUploadProgress(0);
-        const res = await uploadPdf(fd, (pct) => setUploadProgress(pct));
-        doc = res.document;
+        const res = await SourcesApi.uploadPdf(fd, (pct) => setUploadProgress(pct));
+        source = res.source_material;
+      } else if (tab === "youtube_url") {
+        const res = await SourcesApi.uploadYoutube(youtubeUrl.trim(), title.trim());
+        source = res.source_material;
+        try {
+          const transcript = await SourcesApi.getTranscript(source.id);
+          setTranscriptSegments((transcript.segments ?? []).length);
+        } catch {
+          setTranscriptSegments(0);
+        }
       } else {
-        const res = await uploadText({ title: title.trim(), text: textContent.trim() });
-        doc = res.document;
+        const res = await SourcesApi.uploadText({ title: title.trim(), text: textContent.trim() });
+        source = res.source_material;
       }
-      router.push(`/dashboard/documents/${doc.id}`);
+      setCreatedSource(source);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed. Please try again.");
+    } finally {
       setLoading(false);
     }
   };
@@ -77,9 +133,9 @@ export default function UploadPage() {
         Back to documents
       </Link>
 
-      <h1 className="text-3xl font-display text-foreground mb-2">Upload document</h1>
+      <h1 className="text-3xl font-display text-foreground mb-2">Upload source material</h1>
       <p className="text-muted-foreground text-sm mb-8">
-        Add a PDF or paste text to start generating study materials.
+        Add a PDF, raw text, or a YouTube URL to generate study sets.
       </p>
 
       {/* Title */}
@@ -92,13 +148,13 @@ export default function UploadPage() {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="e.g. Biology Chapter 5"
-          className="w-full h-11 px-4 rounded-xl border border-foreground/10 bg-foreground/[0.02] text-foreground text-sm focus:outline-none focus:border-foreground/30 placeholder:text-muted-foreground/50 transition-colors"
+          className="w-full h-11 px-4 rounded-xl border border-foreground/10 bg-foreground/2 text-foreground text-sm focus:outline-none focus:border-foreground/30 placeholder:text-muted-foreground/50 transition-colors"
         />
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 p-1 rounded-xl border border-foreground/10 bg-foreground/[0.02] mb-6 w-fit">
-        {(["pdf", "text"] as UploadTab[]).map((t) => (
+      <div className="flex gap-1 p-1 rounded-xl border border-foreground/10 bg-foreground/2 mb-6 w-fit">
+        {(["pdf", "text", "youtube_url"] as UploadTab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -106,7 +162,7 @@ export default function UploadPage() {
               tab === t ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            {t === "pdf" ? "PDF file" : "Paste text"}
+            {t === "pdf" ? "PDF file" : t === "text" ? "Paste text" : "YouTube URL"}
           </button>
         ))}
       </div>
@@ -120,7 +176,7 @@ export default function UploadPage() {
           onClick={() => fileRef.current?.click()}
           className={`relative rounded-2xl border-2 border-dashed transition-all cursor-pointer ${
             dragOver ? "border-foreground/40 bg-foreground/5" : "border-foreground/15 hover:border-foreground/25"
-          } ${file ? "border-foreground/30 bg-foreground/[0.03]" : ""}`}
+          } ${file ? "border-foreground/30 bg-foreground/3" : ""}`}
           style={{ minHeight: 220 }}
         >
           <input
@@ -167,8 +223,30 @@ export default function UploadPage() {
           onChange={(e) => setTextContent(e.target.value)}
           placeholder="Paste your notes, textbook chapter, or any text content here..."
           rows={12}
-          className="w-full px-4 py-3 rounded-xl border border-foreground/10 bg-foreground/[0.02] text-foreground text-sm focus:outline-none focus:border-foreground/30 placeholder:text-muted-foreground/50 transition-colors resize-none leading-relaxed"
+          className="w-full px-4 py-3 rounded-xl border border-foreground/10 bg-foreground/2 text-foreground text-sm focus:outline-none focus:border-foreground/30 placeholder:text-muted-foreground/50 transition-colors resize-none leading-relaxed"
         />
+      )}
+
+      {/* YouTube upload */}
+      {tab === "youtube_url" && (
+        <div className="space-y-3">
+          <label className="block text-xs font-mono text-muted-foreground uppercase tracking-wide">
+            YouTube URL
+          </label>
+          <div className="relative">
+            <Youtube className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="url"
+              value={youtubeUrl}
+              onChange={(e) => setYoutubeUrl(e.target.value)}
+              placeholder="https://www.youtube.com/watch?v=..."
+              className="w-full h-11 pl-10 pr-4 rounded-xl border border-foreground/10 bg-foreground/2 text-foreground text-sm focus:outline-none focus:border-foreground/30 placeholder:text-muted-foreground/50 transition-colors"
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            We will fetch metadata and transcript when available, then queue embeddings.
+          </p>
+        </div>
       )}
 
       {/* Upload progress bar (PDF only) */}
@@ -195,6 +273,56 @@ export default function UploadPage() {
         </div>
       )}
 
+      {/* Created source summary */}
+      {createdSource && (
+        <div className="mt-5 p-4 rounded-xl border border-foreground/10 bg-foreground/2 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-foreground">{createdSource.title}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Type: {createdSource.source_type ?? createdSource.sourceType ?? tab}
+                {createdSource.page_count ? ` · ${createdSource.page_count} pages` : ""}
+                {createdSource.char_count ? ` · ${createdSource.char_count.toLocaleString()} chars` : ""}
+              </p>
+            </div>
+            <span className={`text-[11px] font-mono px-2 py-0.5 rounded-full border inline-flex items-center gap-1 ${statusMeta(createdSource.processing_status ?? createdSource.status).cls}`}>
+              {statusMeta(createdSource.processing_status ?? createdSource.status).icon}
+              {statusMeta(createdSource.processing_status ?? createdSource.status).label}
+            </span>
+          </div>
+
+          {(createdSource.youtube_url || createdSource.youtube_channel || transcriptSegments !== null) && (
+            <div className="text-xs text-muted-foreground space-y-1 border-t border-foreground/10 pt-3">
+              {createdSource.youtube_url && (
+                <p className="flex items-center gap-1.5">
+                  <Link2 className="w-3 h-3" />
+                  <span className="truncate">{createdSource.youtube_url}</span>
+                </p>
+              )}
+              {createdSource.youtube_channel && <p>Channel: {createdSource.youtube_channel}</p>}
+              {typeof transcriptSegments === "number" && (
+                <p>Transcript segments: {transcriptSegments > 0 ? transcriptSegments : "Not available yet"}</p>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 pt-2">
+            <button
+              onClick={() => router.push(`/dashboard/documents/${createdSource.id}`)}
+              className="h-9 px-4 rounded-lg bg-foreground text-background text-xs hover:bg-foreground/90 transition-colors"
+            >
+              Open material
+            </button>
+            <button
+              onClick={() => router.push(`/dashboard/documents/${createdSource.id}`)}
+              className="h-9 px-4 rounded-lg border border-foreground/10 text-xs text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors"
+            >
+              Start generation
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Submit */}
       <div className="mt-6 flex items-center gap-3">
         <button
@@ -210,7 +338,7 @@ export default function UploadPage() {
           ) : (
             <>
               <Upload className="w-4 h-4" />
-              Upload & continue
+              Upload source
             </>
           )}
         </button>

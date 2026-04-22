@@ -34,7 +34,7 @@ const OUTPUT_TYPES = [
   { id: "written_test", label: "Written Test" },
   { id: "tutor_lesson", label: "Tutor Lesson" },
   { id: "content", label: "Study Guide" },
-  { id: "podcast", label: "Podcast", comingSoon: true },
+  { id: "podcast", label: "Podcast" },
 ] as const;
 
 type OutputTypeId = (typeof OUTPUT_TYPES)[number]["id"];
@@ -124,6 +124,7 @@ export default function DocumentPage() {
 
   const [batch, setBatch] = useState<StudySetBatchStatusResponse | null>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
 
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [outputCache, setOutputCache] = useState<Record<string, unknown>>({});
@@ -161,6 +162,77 @@ export default function DocumentPage() {
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+  }, []);
+
+  const startWebsocket = useCallback((payload?: { url: string; token: string }) => {
+    if (!payload?.url || !payload.token) return;
+    try {
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+
+      const ws = new WebSocket(payload.url);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ type: "auth", token: payload.token }));
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data as string) as {
+            type?: string;
+            task_type?: StudySetType;
+            job_id?: string;
+            output_id?: string;
+            credits_consumed?: number;
+            error?: string;
+          };
+
+          if (!msg.type || !msg.task_type) return;
+          if (!["job_started", "job_completed", "job_failed"].includes(msg.type)) return;
+
+          setBatch((prev) => {
+            if (!prev) return prev;
+            const nextJobs = prev.jobs.map((job) => {
+              const sameType = job.type === msg.task_type || job.job_id === msg.job_id;
+              if (!sameType) return job;
+
+              if (msg.type === "job_started") {
+                return { ...job, status: "processing" as const };
+              }
+              if (msg.type === "job_completed") {
+                return {
+                  ...job,
+                  status: "completed" as const,
+                  output_id: msg.output_id ?? job.output_id,
+                  credits_consumed: msg.credits_consumed ?? job.credits_consumed,
+                };
+              }
+              return {
+                ...job,
+                status: "failed" as const,
+                error: msg.error ?? job.error,
+              };
+            });
+            return { ...prev, jobs: nextJobs };
+          });
+        } catch {
+          // ignore malformed websocket messages
+        }
+      };
+
+      ws.onerror = () => {
+        // polling fallback stays active
+      };
+    } catch {
+      // polling fallback stays active
+    }
   }, []);
 
   const pollBatch = useCallback(async (batchId: string) => {
@@ -195,6 +267,7 @@ export default function DocumentPage() {
     try {
       const res = await generateStudySet({ document_id: docId, types: [type] });
       const batchId = res.batch.id;
+      startWebsocket(res.websocket);
       // Start polling the new batch
       pollRef.current = setInterval(() => pollBatch(batchId), 3000);
       await pollBatch(batchId);
@@ -213,7 +286,7 @@ export default function DocumentPage() {
     // For now we can keep cache unless a specific type is re-generated. Let's just clear active tab so user sees the new progress grids
     setActiveTab(null);
     try {
-      const types = [...selectedTypes].filter((t) => t !== "podcast") as StudySetType[];
+      const types = [...selectedTypes] as StudySetType[];
       
       // Wipe only the outputs being actively regenerated from old cache
       setOutputCache(prev => {
@@ -224,6 +297,7 @@ export default function DocumentPage() {
 
       const res = await generateStudySet({ document_id: docId, types });
       const batchId = res.batch.id;
+      startWebsocket(res.websocket);
       // Fetch immediately to overlay the new pending jobs over the historical list
       await pollBatch(batchId);
       pollRef.current = setInterval(() => pollBatch(batchId), 3000);
@@ -433,16 +507,24 @@ export default function DocumentPage() {
             <section className="mb-8">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-display text-foreground">Generation progress</h2>
-                <button
-                  onClick={() => { setBatch(null); setActiveTab(null); setOutputCache({}); stopPolling(); }}
-                  className="text-xs text-muted-foreground hover:text-foreground underline"
-                >
-                  New batch
-                </button>
+                <div className="flex items-center gap-3">
+                  <Link
+                    href={`/dashboard/study-sets/${batch.batch.id}`}
+                    className="text-xs text-foreground border border-foreground/20 rounded-md px-2 py-1 hover:border-foreground/40 transition-colors"
+                  >
+                    Open workspace
+                  </Link>
+                  <button
+                    onClick={() => { setBatch(null); setActiveTab(null); setOutputCache({}); stopPolling(); }}
+                    className="text-xs text-muted-foreground hover:text-foreground underline"
+                  >
+                    New batch
+                  </button>
+                </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
                 {batch.jobs.map((job) => (
-                  <div key={job.job_id} className="flex flex-col gap-2 px-4 py-3 rounded-xl border border-foreground/10 bg-foreground/[0.02]">
+                  <div key={job.job_id} className="flex flex-col gap-2 px-4 py-3 rounded-xl border border-foreground/10 bg-foreground/2">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-foreground capitalize">
                         {OUTPUT_TYPES.find((t) => t.id === job.type)?.label ?? job.type}
@@ -503,7 +585,7 @@ export default function DocumentPage() {
                   </div>
 
                   {activeTab && (
-                    <div className="p-6 rounded-2xl border border-foreground/10 bg-foreground/[0.02] min-h-32">
+                    <div className="p-6 rounded-2xl border border-foreground/10 bg-foreground/2 min-h-32">
                       {renderOutput(activeTab)}
                     </div>
                   )}

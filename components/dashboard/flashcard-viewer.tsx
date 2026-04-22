@@ -71,7 +71,7 @@ export function FlashcardViewer({ flashcards }: FlashcardViewerProps) {
         >
           {/* Front */}
           <div
-            className="absolute inset-0 rounded-2xl border border-foreground/10 bg-foreground/[0.02] flex flex-col items-center justify-center p-8"
+            className="absolute inset-0 rounded-2xl border border-foreground/10 bg-foreground/2 flex flex-col items-center justify-center p-8"
             style={{ backfaceVisibility: "hidden" }}
           >
             <span className="text-[10px] font-mono text-muted-foreground mb-4">QUESTION — tap to reveal</span>
@@ -79,7 +79,7 @@ export function FlashcardViewer({ flashcards }: FlashcardViewerProps) {
           </div>
           {/* Back */}
           <div
-            className="absolute inset-0 rounded-2xl border border-foreground/20 bg-foreground/[0.04] flex flex-col items-center justify-center p-8"
+            className="absolute inset-0 rounded-2xl border border-foreground/20 bg-foreground/4 flex flex-col items-center justify-center p-8"
             style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
           >
             <span className="text-[10px] font-mono text-muted-foreground mb-4">ANSWER</span>

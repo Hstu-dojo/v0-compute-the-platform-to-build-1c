@@ -61,7 +61,7 @@ function DevTokenPanelInner() {
   };
 
   return (
-    <div className="fixed bottom-4 right-4 z-[9999] w-[440px] max-h-[80vh] overflow-y-auto bg-black border border-yellow-500/40 rounded-xl p-4 shadow-2xl text-xs font-mono">
+    <div className="fixed bottom-4 right-4 z-9999 w-110 max-h-[80vh] overflow-y-auto bg-black border border-yellow-500/40 rounded-xl p-4 shadow-2xl text-xs font-mono">
       <div className="flex items-center justify-between mb-3">
         <span className="text-yellow-400 font-semibold">DEV — Token Panel</span>
         <span className="text-white/30 text-[10px]">NODE_ENV=development</span>
